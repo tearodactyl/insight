@@ -11,9 +11,17 @@ var Common = require('./common');
 // address summary's full txid list, and the utxo/multiutxo arrays for a hot
 // address. We bound the txid list, and size-check every array response before
 // serialization, returning a clean 413 instead of allocating a giant buffer.
+//
+// MAX_RESPONSE_BYTES is the real OOM guard: it catches ANY response by its
+// serialized size regardless of element count, and stays the hard backstop.
+// The count caps below are sized to serve real-world hot addresses fully while
+// remaining well under that byte ceiling. Calibrated against the busiest live
+// address observed (a pool payout wallet, ~79.5k txAppearances / ~79.5k UTXOs,
+// whose full /utxo body measures ~30 MB) so it serves end-to-end; 100k UTXOs is
+// ~38 MB, still under the 50 MB wall, and 100k txids is ~7 MB.
 var MAX_RESPONSE_BYTES = 50 * 1024 * 1024; // 50 MB ceiling, well under heap
-var MAX_TXIDS = 10000;                      // cap txids in an address summary
-var MAX_UTXOS = 50000;                      // cap utxo array length
+var MAX_TXIDS = 100000;                     // cap txids in an address summary
+var MAX_UTXOS = 100000;                     // cap utxo array length
 
 // Serialize, size-check, and send — or 413 if the body would be too large to
 // build safely. Centralizes the guard so every array endpoint uses it.
