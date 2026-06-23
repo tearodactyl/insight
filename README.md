@@ -29,12 +29,17 @@ and their fixes, the fork's lineage and version walls, and host maintenance.
 
 ## Documentation map
 
+The maintained, definitive documentation set is this `README.md`, the `Insight*.md`
+references, and the two artifact directories [`error/`](error/) and
+[`config/`](config/).
+
 | Document | Holds |
 |---|---|
+| [README.md](README.md) | This overview: the introduction, the documentation map, and the role-based entry points. |
 | [InsightBlock.md](InsightBlock.md) | The central reference: what the explorer is, where it lives on disk, and how to operate it — install, launch, shutdown, recovery, the systemd model, log control, nginx. Plus Appendix A (developer internals), Appendix B (integrator API), Appendix C (suggestions, unimplemented). |
 | [InsightFix.md](InsightFix.md) | The four production crash signatures, the `.tail` captures, and the staged fixes in [`error/`](error/) — undeployed hardened copies of the `.js` files; the deployed `node_modules` originals are untouched. |
 | [InsightPort.md](InsightPort.md) | Fork lineage, upstream/ecosystem status, component/module versions, upgrade walls, porting and strengthening. |
-| [Cleanup.md](Cleanup.md) | Host disk clean-up and journald capping: vacuum the journal, drop stale snap revisions and caches, the explorer flat log. |
+| [`error/`](error/) | The staged fix artifacts: hardened copies of the `.js` files, each `node --check`-clean and diffed against the deployed original. Catalogued in InsightFix.md. |
 | [`config/`](config/) | The deployed files verbatim: `zerod.service`, `bitcore.service`, `bitcore-node.json` (+`.spawn.bak`), `bitcore_start.sh`, `zero.conf`, `nginx-default`, `journald.conf`, `logrotate-bitcore`. |
 
 ## Start here, by role
@@ -46,7 +51,6 @@ and their fixes, the fork's lineage and version walls, and host maintenance.
 - Recovery (crashes, locks, hangs, rollback, disk-full): [InsightBlock.md §5](InsightBlock.md#5-recovery)
 - The connect-vs-spawn model and the systemd coupling: [InsightBlock.md §3](InsightBlock.md#3-operating-modes--connect-vs-spawn)
 - Crash signatures and their fixes: [InsightFix.md](InsightFix.md)
-- Host maintenance and disk reclaim: [Cleanup.md](Cleanup.md)
 - Deployed file reference: [`config/`](config/)
 
 **Developer** — working on the explorer code.
