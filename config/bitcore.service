@@ -1,0 +1,31 @@
+# /etc/systemd/system/bitcore.service
+# bitcore-node (the Insight explorer) — the follower. Connects to the
+# systemd-managed zerod via RPC + ZMQ (connect mode). Restarts when *it*
+# fails or when *zerod* restarts (PartOf), re-connecting each time.
+
+[Unit]
+After=zerod.service network-online.target
+Requires=zerod.service
+PartOf=zerod.service
+# StartLimit* MUST live in [Unit] on systemd 237 — they were moved/renamed
+# from [Service] in v230 and are SILENTLY IGNORED if left in [Service].
+StartLimitIntervalSec=300
+StartLimitBurst=5
+
+[Service]
+Type=simple
+User=ubuntu
+Group=ubuntu
+WorkingDirectory=/home/ubuntu/zero/mynode
+# nvm node has no systemd shell init — hard-code the absolute path AND set PATH.
+Environment=PATH=/home/ubuntu/.nvm/versions/node/v8.17.0/bin:/usr/bin:/bin
+ExecStart=/home/ubuntu/.nvm/versions/node/v8.17.0/bin/node ./node_modules/bitcore-node-zero/bin/bitcore-node start
+Restart=on-failure
+RestartSec=10
+# journald, not append: — StandardOutput=append: needs systemd >=240 (237 here).
+StandardOutput=journal
+StandardError=journal
+SyslogIdentifier=bitcore
+
+[Install]
+WantedBy=multi-user.target

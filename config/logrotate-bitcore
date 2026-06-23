@@ -1,0 +1,19 @@
+# /etc/logrotate.d/bitcore
+# ONLY needed if a downstream tool must parse a flat start.out file. The
+# preferred path is journald (StandardOutput=journal + capped journald.conf),
+# which gives per-boot separation, rotation, compression and a disk cap with no
+# moving parts. Keep this rule only if you retain the plain-file log.
+#
+# copytruncate matters: bitcore holds the file open and won't reopen on a signal,
+# so logrotate copies then truncates in place rather than renaming (a rename
+# would leave bitcore writing to the now-unlinked inode).
+
+/home/ubuntu/zero/mynode/start.out {
+    size 200M
+    rotate 10
+    compress
+    delaycompress
+    missingok
+    notifempty
+    copytruncate
+}

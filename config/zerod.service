@@ -1,0 +1,24 @@
+# /etc/systemd/system/zerod.service
+# Zero daemon (zerod) — the data layer. Authoritative; owns the datadir lock.
+# Independent lifecycle: nothing depends *up* from bitcore to zerod.
+
+[Unit]
+Description=Zero daemon (zerod)
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=forking
+User=ubuntu
+Group=ubuntu
+PIDFile=/home/ubuntu/.zero/zerod.pid
+ExecStart=/home/ubuntu/zero/BIN/zerod -daemon -conf=/home/ubuntu/.zero/zero.conf -datadir=/home/ubuntu/.zero -pid=/home/ubuntu/.zero/zerod.pid
+ExecStop=/home/ubuntu/zero/BIN/zero-cli -conf=/home/ubuntu/.zero/zero.conf -datadir=/home/ubuntu/.zero stop
+Restart=on-failure
+RestartSec=15
+TimeoutStartSec=300
+TimeoutStopSec=300
+LimitNOFILE=65536
+
+[Install]
+WantedBy=multi-user.target

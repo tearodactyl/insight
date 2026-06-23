@@ -1,0 +1,40 @@
+# /etc/nginx/sites-available/default
+# Enabled via symlink: /etc/nginx/sites-enabled/default -> this file
+# (stock nginx.conf does `include /etc/nginx/sites-enabled/*;`). conf.d/ is empty.
+#
+# TLS terminates here; nginx reverse-proxies cleartext to bitcore on :3001.
+# <IP> = the host's public IP; proxy target http://<IP>:3001/ = bitcore HTTP port.
+# Certs are Certbot-managed under /etc/letsencrypt/live/.
+#
+# Only the explorer path is shown. The live file also carries redirect-only
+# vhosts (trimmed here): wallet., zdrop. (proxy-redirect); apex zeromachine.io /
+# zerocurrency.io 301 -> zero.directory; zight. test vhost.
+#
+# 18.04 note: NO proxy_read_timeout / proxy_buffering / client_max_body_size
+# overrides — defaults apply. proxy_read_timeout 60s matches keepalive_timeout 60
+# and is fine for short JSON; raise proxy_read_timeout if a long address-history
+# call hits the 60s ceiling.
+# After editing: sudo nginx -t  &&  sudo systemctl reload nginx
+
+# HTTP :80 — insight.zeromachine.io / insight.zerocurrency.io
+server {
+    server_name insight.zeromachine.io insight.zerocurrency.io;
+    listen 80; listen [::]:80;
+    location = / { return 301 https://insight.zeromachine.io/insight; }
+    location /   { proxy_pass http://<IP>:3001/; }
+}
+
+# HTTPS :443 — insight.zeromachine.io / insight.zerocurrency.io  (Certbot)
+server {
+    server_name insight.zeromachine.io insight.zerocurrency.io;
+    keepalive_timeout 60;
+    listen [::]:443 ssl; listen 443 ssl;
+    ssl_certificate     /etc/letsencrypt/live/insight.zeromachine.io/fullchain.pem;
+    ssl_certificate_key /etc/letsencrypt/live/insight.zeromachine.io/privkey.pem;
+    include /etc/letsencrypt/options-ssl-nginx.conf;
+    ssl_dhparam /etc/letsencrypt/ssl-dhparams.pem;
+    location = / { return 301 https://insight.zeromachine.io/insight; }
+    location /   { proxy_pass http://<IP>:3001/; }
+}
+
+# explorer.zeromachine.io / explorer.zerocurrency.io — same proxy, :80 + :443

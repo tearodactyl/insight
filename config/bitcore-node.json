@@ -1,0 +1,25 @@
+{
+  "_comment": "Reference copy. rpcuser/rpcpassword must match ~/.zero/zero.conf; real values are redacted here and live only in the on-disk copies. Remove this _comment line in the deployed file.",
+  "network": "livenet",
+  "port": 3001,
+  "services": [
+    "bitcoind",
+    "insight-api-zero",
+    "insight-ui-zero",
+    "web"
+  ],
+  "servicesConfig": {
+    "bitcoind": {
+      "connect": [
+        {
+          "rpchost": "127.0.0.1",
+          "rpcport": 23811,
+          "rpcuser": "<REDACTED>",
+          "rpcpassword": "<REDACTED>",
+          "zmqpubrawtx": "tcp://127.0.0.1:28332",
+          "zmqpubhashblock": "tcp://127.0.0.1:28332"
+        }
+      ]
+    }
+  }
+}
