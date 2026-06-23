@@ -4,13 +4,13 @@ Companion to [Insight.md](Insight.md) (overall description, document map, operat
 and [InsightPort.md](InsightPort.md) (lineage, ecosystem, versions, porting).
 
 This document is the tight, operational record of how the Zero Insight explorer
-(`bitcore` process, Node v8.17.0, host `toru`) has crashed in production, what the
+(`bitcore` process, Node v8.17.0) has crashed in production, what the
 captured logs show, and the fixes — both the **first batch already staged** and the
 **rest still to merge**. Each fix records the *shape* of the change and why, with
 short snippets, and points at the staged files in `error/` by line number.
 
-**Source of truth for the crashes:** `/home/ubuntu/zero/NSAVE/errors/` on `toru` —
-saved log tails of the `bitcore` process dying. Referenced captures:
+**Source of truth for the crashes:** saved log tails of the `bitcore` process
+dying, archived on the host. Referenced captures:
 
 | Capture | Date | Crash it documents |
 |---|---|---|
@@ -24,7 +24,7 @@ saved log tails of the `bitcore` process dying. Referenced captures:
 **Staged ≠ deployed.** All fixes live as edited copies under `error/`, each
 `node --check`-clean and `diff -u`-verified against the deployed original. The
 deployed `node_modules` originals under `insight-api-zero/`, `bitcore-lib-zero/`,
-and `bitcore-node-zero/` are **untouched**. Nothing is deployed to toru without an
+and `bitcore-node-zero/` are **untouched**. Nothing is deployed to the host without an
 explicit go-ahead. See [Insight.md](Insight.md) Operations for the deploy/rollback
 procedure.
 
@@ -113,7 +113,7 @@ both must be shut** — deploying only one leaves the other wide open:
   ```
 
 - **Door 2 — rawtx path** (`bitcore-node-zero/lib/services/bitcoind.js._zmqTransactionHandler`).
-  This is the door **nobody had fixed on toru** — it parses every rawtx ZMQ frame
+  This is the door **nobody had fixed** — it parses every rawtx ZMQ frame
   via `tx.fromString(message)` with no size check and no try/catch, so the same
   `RangeError` kills the process independently of the inv fix. Staged in
   `error/bitcoind.js` (mirrors door 1; full detail in §3). Frame-size guard at
@@ -312,7 +312,7 @@ the RPC client is hoisted out, each site calls
 
 - **Crash #1 has two doors, and `bitcoind.js` is the one nobody fixed.** Both the
   inv handler and `_zmqTransactionHandler` feed *untrusted* ZMQ bytes into the same
-  parser. On toru the rawtx handler had no guard, so a malformed frame throws
+  parser. The rawtx handler had no guard, so a malformed frame throws
   `RangeError` straight out of `tx.fromString` and kills the process regardless of
   the `index.js` fix. Change 2 mirrors the inv fix exactly — both doors shut, both
   log the same way.
@@ -343,7 +343,7 @@ Crash #2's *mechanism* was spawn-mode: bitcore owning zerod's lifecycle. A stale
 datadir lock ("Cannot obtain a lock... probably already running") made each `zerod`
 spawn fail; the fixed-interval respawn loop (outside `async.retry`, so
 `startRetryCount: 60` never bounded it) plus the `_initZmqSubSocket` fd-leak turned
-one failure into fd exhaustion. The observed orphan state (toru, 2026-06-21): zerod
+one failure into fd exhaustion. The observed orphan state (2026-06-21): zerod
 running detached (PPID 1) while bitcore was down — a bitcore restart then tried to
 launch a *second* zerod against `/home/ubuntu/.zero`, collided on the lock, and
 spiralled into EMFILE.
@@ -399,4 +399,4 @@ individually.
 The exact stop/back-up/swap/start/verify procedure, the graceful-shutdown rules
 (**never `kill -9` zerod** — always `zero-cli ... stop`; **never `rm` a lock**),
 and the rollback path live in [Insight.md](Insight.md) Operations. Standing
-constraint: nothing reaches toru without the user's explicit go-ahead.
+constraint: nothing reaches the host without the user's explicit go-ahead.

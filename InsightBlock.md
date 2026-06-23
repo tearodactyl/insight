@@ -1,36 +1,21 @@
 # Zero (ZER) Insight Block Explorer — Operations Reference
 
-> The what-it-is and how-to-run-it reference for the Zero Insight explorer.
+> The how-to-run-it reference for the Zero Insight explorer.
 > Audience: the server administrator running `zerod` and `bitcore`. Expert reader
 > assumed (senior Linux sysadmin + software engineer).
 >
-> Addressed crash and fix scenarios are documented in [InsightFix.md](InsightFix.md);
-> fork lineage, the version matrix, and upgrade walls in [InsightPort.md](InsightPort.md);
-> the verbatim deployed files in [`config/`](config/). Developer internals and
-> third-party-integrator details are in the appendices.
-
----
-
-## Document map
-
-| Document | Holds |
-|---|---|
-| **InsightBlock.md** (this) | What the explorer is, where it lives on disk, how to operate it: launch, shutdown, recovery, the systemd model, log control, nginx. Appendix A (developer internals), Appendix B (integrator API), Appendix C (suggestions, unimplemented). |
-| [InsightFix.md](InsightFix.md) | The four production crash signatures, the `.tail` captures, and the staged fixes in [`error/`](error/) — undeployed hardened copies of the `.js` files; the deployed `node_modules` originals are untouched. |
-| [InsightPort.md](InsightPort.md) | Fork lineage, upstream/ecosystem status, component/module versions, upgrade walls, porting and strengthening. |
-| [Cleanup.md](Cleanup.md) | Host disk clean-up and journald capping: vacuum the journal, drop stale snap revisions and caches, the explorer flat log. |
-| [`config/`](config/) | The deployed files verbatim: `zerod.service`, `bitcore.service`, `bitcore-node.json` (+`.spawn.bak`), `bitcore_start.sh`, `zero.conf`, `nginx-default`, `journald.conf`, `logrotate-bitcore`. |
+> Part of the Zero Insight explorer docs — see [README.md](README.md) for the
+> project overview, the documentation map, and role-based entry points (Admin,
+> Developer, Integrator).
 
 ---
 
 ## 1. What it is
 
 The Zero Insight explorer is one Node process (`bitcore`) fronting one full node
-(`zerod`), behind nginx. Four coupled npm packages make up the explorer —
-`bitcore-lib-zero`, `bitcore-node-zero`, `insight-api-zero`, `insight-ui-zero`.
-`bitcore-node-zero`
-is the orchestrator and runs as the process named `bitcore`; it loads the API, the
-AngularJS UI, and the `bitcoind` service that talks to `zerod` over RPC and ZMQ.
+(`zerod`), behind nginx; the architecture and lineage are in
+[README.md](README.md). This section pins down the three runtime components and
+their identities — the rest of the reference builds on them.
 
 ```
 client ──TLS──> nginx :443 ──cleartext──> bitcore :3001 ──RPC :23811──> zerod
@@ -665,9 +650,7 @@ MaxRetentionSec=1month
 ```
 
 These are install-time config (§4.0 step 6), not a built-in default; copy the file
-into place and `systemctl restart systemd-journald` to enforce them. Disk reclaim and
-the wider host clean-up are in [Cleanup.md](Cleanup.md). Apply with
-`systemctl restart systemd-journald`; read per-run with
+into place and `systemctl restart systemd-journald` to enforce them. Read per-run with
 `journalctl -u bitcore -b`. logrotate is only needed if a downstream tool must parse
 a flat `start.out`; the rule in [`config/logrotate-bitcore`](config/logrotate-bitcore)
 uses `copytruncate` because bitcore holds the fd open and will not reopen on a

@@ -3,7 +3,7 @@
 Companion to [Insight.md](Insight.md) (the overall description and document map)
 and [InsightFix.md](InsightFix.md) (crash signatures and staged hardening). This
 document covers **where the code came from, what state the ecosystem is in, what
-versions run on `toru`, and what is worth porting in** — plus an appendix on the
+versions run in production, and what is worth porting in** — plus an appendix on the
 range of explorer alternatives, focused on Blockbook.
 
 ---
@@ -28,7 +28,7 @@ each pinned to a specific commit.
 
 All five live under `/home/ubuntu/zero/mynode/node_modules/<name>/` — this is
 the **deployed/running** code and the actual edit target for the fixes
-(distinct from the local clones under `/Users/walter/Work/ZK/ZKs/insight/`).
+(distinct from the local working-copy clones).
 `bitcore-message-zero` is not in any crash path; the crash-relevant code is in
 `bitcore-lib-zero` (parser), `bitcore-node-zero` (spawn/ZMQ), and
 `insight-api-zero` (handler/API).
@@ -38,13 +38,13 @@ Supporting repos in the org: **bitcore-build-zero** (build tooling),
 appendix).
 
 ### Cloned locally
-The four direct-dep repos are cloned into `/Users/walter/Work/ZK/ZKs/insight/`:
+The four direct-dep repos are cloned into the local working copy:
 ```
 bitcore-node-zero/  insight-api-zero/  insight-ui-zero/  bitcore-lib-zero/
 ```
 Each has an `upstream` remote added pointing at `ProphetAlgorithms/<repo>.git`.
 The transitive `bitcore-message-zero` is not cloned locally (it exists only in
-the toru install); clone `zerocurrencycoin/bitcore-message-zero` if it needs
+the deployed install); clone `zerocurrencycoin/bitcore-message-zero` if it needs
 review.
 
 Also cloned into the same directory for evaluation: `blockbook/` (Trezor, the
@@ -63,7 +63,7 @@ explorer). Provenance for both is in the appendix.
 
 ---
 
-## 2. Runtime & platform versions (toru)
+## 2. Runtime & platform versions
 
 | Component | Version | Notes |
 |---|---|---|
@@ -73,7 +73,6 @@ explorer). Provenance for both is in the appendix.
 | Kernel | Linux 4.15.0-76-generic x86_64 | |
 | systemd | 237 | see the [Insight.md](Insight.md) systemd notes for v237 gotchas |
 | nginx | 1.14.0 | TLS terminator / reverse proxy |
-| Host | `toru` (internal `tor2`) | |
 | zerod identity | version 3030106, subversion `/Ambrym:3.3.1-beta7(bitcore)/`, protocol 170009 (Sapling) | |
 
 ### Node-8 wall (the central upgrade constraint)
@@ -112,7 +111,7 @@ cherry-picks.
 
 ### Lineage
 ```
-str4d/*-zcash  →  …  →  ProphetAlgorithms/*  →  zerocurrencycoin/*  (what runs on toru)
+str4d/*-zcash  →  …  →  ProphetAlgorithms/*  →  zerocurrencycoin/*  (what runs in production)
 ```
 - The **direct parent / real upstream is `ProphetAlgorithms/*`**, not str4d and not
   zerocurrencycoin. ProphetAlgorithms is the last active maintainer of *this* lineage.
@@ -362,7 +361,7 @@ So Zcash, Flux, SnowGem (TENT), and Firo already have upstream Blockbook templat
 
 **Why it's postponed.** Per explicit direction, migration is deferred until the Insight stack is modernized via Pirate/Horizen cherry-picks. It is a new language/runtime (Go/RocksDB) and a separate deployment; the near-term effort is keeping Insight healthy, not replatforming.
 
-**Provenance of the local clone.** `blockbook/` was cloned shallow (`--depth 1`) into `/Users/walter/Work/ZK/ZKs/insight/` on 2026-06-20, from `https://github.com/trezor/blockbook` (the canonical Trezor source, **not** a fork). Default branch `master`, HEAD `cfa7374` ("feat(eth): observe alt-mempool tx lifetime and cache depth", 2026-06-19), ~784 stars, actively developed. This is upstream itself. Separately, `zerocurrencycoin/blockbook` exists as a **2020 fork** of this repo (`fork:true`, `parent:trezor/blockbook`, last pushed 2020-12-23) — an abandoned earlier attempt to put Zero on Blockbook; the fresh upstream clone supersedes it.
+**Provenance of the local clone.** `blockbook/` was cloned shallow (`--depth 1`) into the local working copy on 2026-06-20, from `https://github.com/trezor/blockbook` (the canonical Trezor source, **not** a fork). Default branch `master`, HEAD `cfa7374` ("feat(eth): observe alt-mempool tx lifetime and cache depth", 2026-06-19), ~784 stars, actively developed. This is upstream itself. Separately, `zerocurrencycoin/blockbook` exists as a **2020 fork** of this repo (`fork:true`, `parent:trezor/blockbook`, last pushed 2020-12-23) — an abandoned earlier attempt to put Zero on Blockbook; the fresh upstream clone supersedes it.
 
 ### A.3 LBE (Light Block Explorer) — the lightweight alternative
 
