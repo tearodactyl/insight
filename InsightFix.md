@@ -1,6 +1,6 @@
 # InsightFix — Crash signatures, mitigations, and deployed hardening
 
-Companion to [Insight.md](Insight.md) (overall description, document map, operations)
+Companion to [InsightBlock.md](InsightBlock.md) (the central operations reference)
 and [InsightPort.md](InsightPort.md) (lineage, ecosystem, versions, porting).
 
 This document is the tight, operational record of how the Zero Insight explorer
@@ -10,15 +10,6 @@ captured logs show, and the fixes — the **five-file backend batch (now deploye
 merge**. Each fix records the *shape* of the change and why, with short snippets,
 and points at the files in `error/` (backend) and `insight-ui-zero/public/` (UI) by
 line number.
-
-**Companion working notes captured during this deploy:**
-
-| Note | What it covers |
-|---|---|
-| [Size.md](Size.md) | UTXO / txid / response-size findings — the real worst-case founders addresses, how the crash-#3 caps behave against them, sizing math, cap-keep decision. Folded into §2.2 below. |
-| [NodeVersion.md](NodeVersion.md) | Why bare `node` on tor2 now resolves to v8.17.0 (nvm interactive-guard footgun) and the `node --check` rule of thumb. Referenced in §7 (monitoring). |
-| [InsightDeploy.md](InsightDeploy.md) | The exact stop/back-up/swap/start/verify runbook used for this deploy. |
-| [Cleanup.md](Cleanup.md) | Host disk / journald cleanup procedure. |
 
 **Source of truth for the crashes:** saved log tails of the `bitcore` process
 dying, archived on the host. Referenced captures:
@@ -34,14 +25,13 @@ dying, archived on the host. Referenced captures:
 
 **Deploy status (2026-06-23).** The five-file backend batch and the UI banner fix
 (§4a) are **deployed and live** on tor2. Each backend file was `node --check`-clean
-(under the service's v8.17.0 — see [NodeVersion.md](NodeVersion.md)) and
+(under the service's v8.17.0) and
 `diff -u`-verified against the deployed original before the swap; the deployed
 originals were backed up with a `.20260623-*` timestamp suffix (`cp -p`, preserving
 mode/mtime) before being overwritten. The edited copies remain under `error/`
 (backend) and `insight-ui-zero/public/` (UI) as the source of record. Standing
 constraint: nothing reaches the host without the user's explicit go-ahead. See
-[InsightDeploy.md](InsightDeploy.md) for the exact procedure and
-[Insight.md](Insight.md) Operations for rollback.
+[InsightBlock.md §5](InsightBlock.md#5-recovery) for rollback.
 
 ---
 
@@ -56,7 +46,7 @@ constraint: nothing reaches the host without the user's explicit go-ahead. See
 
 The Node-8 / OpenSSL-1.0.2 constraint behind #4 (and the upgrade wall) is documented
 in [InsightPort.md](InsightPort.md) §2. The lock-file mechanics behind #2 are in
-[Insight.md](Insight.md) Operations (crash recovery). Those are not repeated here.
+[InsightBlock.md §5.2](InsightBlock.md#52-lock-files). Those are not repeated here.
 
 **Beyond the crash batch:** a UI cosmetic fix — the offline banner said "zcashd"
 (un-rethemed inheritance from str4d's Zcash Insight fork) and now says "zerod" — was
@@ -212,8 +202,7 @@ so we never even build arrays we already know are too big.
 | `MAX_TXIDS` | 100,000 | Truncate the summary txid list; set `txAppearancesTruncated` + `txAppearancesLimit`. |
 | `MAX_UTXOS` | 100,000 | `413` if a `/utxo` array exceeds this count. |
 
-**Sizing — what the real worst case looks like** (full working notes:
-[Size.md](Size.md)). The busiest addresses are the **founders / dev-fee reward
+**Sizing — what the real worst case looks like.** The busiest addresses are the **founders / dev-fee reward
 addresses** (`vFoundersRewardAddress` in `chainparams.cpp`, local copy
 `/Users/walter/Work/ZK/Zero400/src/chainparams.cpp`); they take a slice of nearly
 every block subsidy. Measured against the deployed caps (chain tip block 2,479,518):
@@ -231,7 +220,7 @@ crash-#3 abort. **Decision: keep caps at 100k.** Do NOT raise them to serve #2/#
 full — that re-introduces the OOM we just closed. Note the cap currently rejects
 only *after* the node returns the full UTXO set, so the 413 path is slow on the
 mega-addresses (the upstream fetch cost remains); a pre-count / pagination is the
-durable fix (tracked in §5 and [Size.md](Size.md) §6). The four founders addresses
+durable fix (tracked in §5). The four founders addresses
 are **known mega-addresses** — a `/utxo` 413 on them is expected, not a regression.
 
 **Design note.** Pagination machinery already exists (`transactions.js` paginates
@@ -399,8 +388,8 @@ the RPC client is hoisted out, each site calls
   for systemd 237). The ~13-min in-process backoff means a zerod-unavailable
   situation is handled inside the process and never trips the 5-per-300s limit; the
   unit only enters `failed` on a genuine fast crash-loop. Cascading restarts flow
-  via `PartOf=zerod.service`. (Unit details: [Insight.md](Insight.md) systemd
-  section + `config/bitcore.service`.)
+  via `PartOf=zerod.service`. (Unit details: [InsightBlock.md §4.2](InsightBlock.md#42-systemd-model)
+  + `config/bitcore.service`.)
 
 ---
 
@@ -427,7 +416,7 @@ this signature: the architectural change removes the trigger; the code change ma
 the path safe even if it is ever exercised again.
 
 The systemd unit coupling (`Requires`/`After`/`PartOf`), lock-file mechanics, and
-crash-recovery runbook are in [Insight.md](Insight.md) Operations, with unit files in
+crash-recovery runbook are in [InsightBlock.md §5](InsightBlock.md#5-recovery), with unit files in
 `config/`. They are operations, not crash mitigations, so they live there.
 
 ---
@@ -520,11 +509,10 @@ crash-#1 layers (`index.js` shuts the inv door, `bitcoind.js` shuts the rawtx do
 `transaction.js` makes both logs diagnosable) plus `addresses.js` (#3) and
 `currency.js` (#4); the UI banner fix (§4a) followed in the same window.
 
-The exact stop/back-up/swap/start/verify procedure used is in
-[InsightDeploy.md](InsightDeploy.md). The graceful-shutdown rules (**never `kill -9`
+The graceful-shutdown rules (**never `kill -9`
 zerod** — always `zero-cli ... stop`, since SIGKILL forces a multi-hour dirty-shutdown
 reindex; **never `rm` a lock** — fd-locks are kernel-owned) and the rollback path
-(restore the `.20260623-*` backups) live in [Insight.md](Insight.md) Operations.
+(restore the `.20260623-*` backups) live in [InsightBlock.md §5](InsightBlock.md#5-recovery).
 Standing constraint: nothing reaches the host without the user's explicit go-ahead.
 
 ---
@@ -546,7 +534,7 @@ journalctl -u bitcore.service --since '2026-06-23' \
 A clean `NRestarts=0` since the deploy timestamp is the headline signal: it means
 none of crashes #1/#2/#3 have fired. Validation during the deploy: the service
 survived all four founders mega-addresses with `NRestarts=0` and no
-`heap`/`OOM`/`RangeError` in the journal ([Size.md](Size.md) §4).
+`heap`/`OOM`/`RangeError` in the journal.
 
 **Crash #1 (bad-frame doors).** The fix logs-and-drops instead of crashing. A bad
 frame now appears as a `warn`, not a process death:
@@ -588,5 +576,4 @@ check at the `/insight/` prefix.
 **`node --check` runtime caveat.** Any `node --check` of a staged file must run
 under the **service's** v8.17.0, not a bare `node` (which historically resolved to
 v8.10.0 on this host). Use the explicit path
-`/home/ubuntu/.nvm/versions/node/v8.17.0/bin/node`. Full reconciliation:
-[NodeVersion.md](NodeVersion.md).
+`/home/ubuntu/.nvm/versions/node/v8.17.0/bin/node`.

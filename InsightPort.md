@@ -1,7 +1,8 @@
 # InsightPort — Lineage, Ecosystem Status, Component Versions & Porting
 
-Companion to [Insight.md](Insight.md) (the overall description and document map)
-and [InsightFix.md](InsightFix.md) (crash signatures and staged hardening). This
+Companion to [InsightBlock.md](InsightBlock.md) (the central operations reference)
+and [InsightFix.md](InsightFix.md) (crash signatures and staged hardening); the
+[README](README.md) holds the documentation map. This
 document covers **where the code came from, what state the ecosystem is in, what
 versions run in production, and what is worth porting in** — plus an appendix on the
 range of explorer alternatives, focused on Blockbook.
@@ -71,7 +72,7 @@ explorer). Provenance for both is in the appendix.
 | Node (system) | v8.10.0 | `/usr/bin/node`; **unused** |
 | OS | Ubuntu 18.04.4 LTS (bionic) | |
 | Kernel | Linux 4.15.0-76-generic x86_64 | |
-| systemd | 237 | see the [Insight.md](Insight.md) systemd notes for v237 gotchas |
+| systemd | 237 | see the [InsightBlock.md §4.2](InsightBlock.md#42-systemd-model) systemd notes for v237 gotchas |
 | nginx | 1.14.0 | TLS terminator / reverse proxy |
 | zerod identity | version 3030106, subversion `/Ambrym:3.3.1-beta7(bitcore)/`, protocol 170009 (Sapling) | |
 

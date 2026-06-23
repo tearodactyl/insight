@@ -92,7 +92,10 @@ These are hand-placed, not packaged, so no apt upgrade touches them. The Node
 runtime is not here — it is the nvm install at
 `/home/ubuntu/.nvm/versions/node/v8.17.0/bin/node`. System `/usr/bin/node`
 (v8.10.0) is unused and must never be resolved by `env node` — the unit pins the
-absolute path to avoid exactly that, §4.2.
+absolute path to avoid exactly that, §4.2. The CLI is a separate trap: `~/.bashrc`
+sources nvm *below* its `[ -z "$PS1" ] && return` guard, so a non-interactive
+`ssh tor2 'node …'` skips nvm and falls through to v8.10.0. Before deploy, run
+`node --check` with the absolute v8.17.0 path, not a bare `node`.
 
 ### 2.2 zerod datadir
 
@@ -658,6 +661,14 @@ signal, so logrotate must copy then truncate in place rather than rename. nginx
 access/error logs under `/var/log/nginx/` rotate via the distro's
 `/etc/logrotate.d/nginx`. zerod's own `~/.zero/debug.log` is separate; consult it
 for peer `Misbehaving` lines.
+
+**Disk reclaim** (re-runnable, idempotent; none of it touches the datadir or
+`node_modules`): `journalctl --vacuum-size=1G` / `--vacuum-time=1month` enforces the
+caps immediately; truncate the legacy flat log with `: > start.out` (never `rm` it
+while a hand-launched bitcore holds the fd); `snap remove --revision` each row marked
+`disabled` then `snap set system refresh.retain=2`; clear `~/.npm/_cacache` and
+`~/.cache/*` as `ubuntu`. A stale machine-id tree under `/var/log/journal/` (one not
+matching `cat /etc/machine-id`) is safe to `rm -rf`.
 
 ---
 

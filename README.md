@@ -39,10 +39,6 @@ references, and the two artifact directories [`error/`](error/) and
 | [InsightBlock.md](InsightBlock.md) | The central reference: what the explorer is, where it lives on disk, and how to operate it — install, launch, shutdown, recovery, the systemd model, log control, nginx. Plus Appendix A (developer internals), Appendix B (integrator API), Appendix C (suggestions, unimplemented). |
 | [InsightFix.md](InsightFix.md) | The four production crash signatures, the `.tail` captures, and the hardening **deployed 2026-06-23** — five backend `.js` files plus the UI "zcashd"→"zerod" banner fix (one template, `translate` directive removed); source of record in [`error/`](error/). Includes monitoring, sizing, and message-test procedures. |
 | [InsightPort.md](InsightPort.md) | Fork lineage, upstream/ecosystem status, component/module versions, upgrade walls, porting and strengthening. |
-| [Size.md](Size.md) | UTXO / txid / response-size findings — the real worst-case founders addresses and how the crash-#3 caps behave against them. Folded into InsightFix.md §2.2. |
-| [NodeVersion.md](NodeVersion.md) | Why bare `node` on tor2 resolves to v8.17.0 (nvm interactive-guard footgun) and the `node --check` rule of thumb. |
-| [InsightDeploy.md](InsightDeploy.md) | The stop/back-up/swap/start/verify runbook used for the 2026-06-23 deploy. |
-| [Cleanup.md](Cleanup.md) | Host disk / journald cleanup procedure. |
 | [`error/`](error/) | The deployed fix artifacts, source of record: the five hardened backend `.js` files (flat) plus the one UI banner template (`connection.html`) in a path-preserving `insight-ui-zero/public/…` subtree. Each backend file is `node --check`-clean and diffed against the deployed original. Catalogued in InsightFix.md. |
 | [`config/`](config/) | The deployed files verbatim: `zerod.service`, `bitcore.service`, `bitcore-node.json` (+`.spawn.bak`), `bitcore_start.sh`, `zero.conf`, `nginx-default`, `journald.conf`, `logrotate-bitcore`. |
 
