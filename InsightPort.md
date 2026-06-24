@@ -197,7 +197,7 @@ On Firo (formerly Zcoin / XZC): included for completeness, but it is NOT in the 
 ### Maintenance ranking of portable Insight siblings (most to least useful as a source)
 
 1. Pirate (ARRR). `insight-ui-pirate` pushed 2026-06-11, `insight-api-pirate` 2024-10-13, `bitcore-lib-pirate` 2024-11-01. The recent api commit is "add transaction version 5" — genuine tx-parsing/consensus work — plus Sapling handling (`saplingblocks.js`, `witness.js`). Closest architectural match to Zero (privacy-default Sapling). Branches: `master`, `generic-ui`, `saplingroot`. Primary porting source.
-2. Horizen (ZEN). `insight-api-zen` 2024-02-29, `insight-ui-zen` 2023-09-13, from a funded org with the most professional codebase. But its distinctive recent commits are ZEN-specific config, and it has since left the PoW chain entirely (below), so it is a one-time selective-scavenging source, not a main line.
+2. Horizen (ZEN). `insight-api-zen` 2024-02-29, `insight-ui-zen` 2023-02-09, from a funded org with the most professional codebase. But its distinctive recent commits are ZEN-specific config, and it has since left the PoW chain entirely (below), so it is a one-time selective-scavenging source, not a main line.
 3. Zclassic (ZCL). Zero's literal ancestor, but the explorer repos are frozen Feb 2018 (pre-Sapling). Historical reference only.
 
 ### Does Horizen have relevant fixes not in Pirate? Largely no.
@@ -324,6 +324,116 @@ Already present in Zero, do NOT re-port:
 Requires manual three-way reconciliation (both sides edited the same files):
 
 - `currency.js` (Zero added CoinGecko handling; upstream rewrote it) and the UI changes. Do not cherry-pick these blindly. (Zero's local `currency.js` has additionally been hardened — see [InsightFix.md](InsightFix.md) crash #4 — which a reconcile must preserve.)
+
+---
+
+## 6. Ecosystem build toolchain & Node-pinning status
+
+Verified 2026-06-23 against the local clones under
+`$INSIGHT/ecosystem/{Pirate,TENT,Zen}/` (where `INSIGHT` is the local Insight repo
+root) — the full
+four/five-repo Insight stacks for Pirate (ARRR), TENT (TENT/SnowGem), and Horizen
+(ZEN). The takeaway: **no sibling has modernized the toolchain, and none pins
+Node.** Porting buys chain logic, not a build-system or runtime upgrade — this
+section is the evidence behind that claim in §2 and §4.
+
+### 6.1 Build tools per repo (the whole ecosystem)
+
+The toolchain is uniform by repo *role*, not by coin. Each role uses the same
+build tool across all three families:
+
+| Repo role | Build tool | Version (all families) | Notes |
+|---|---|---|---|
+| `bitcore-lib-*` | gulp | `^3.8.10` | gulp 3 (EOL); compiles lib primitives |
+| `bitcore-node-*` | none | — | mocha/jshint only; no asset build |
+| `insight-api-*` | none | — | mocha only; no asset build |
+| `insight-ui-*` | grunt + bower | `grunt ~0.4.2`, bower per below | the only repo that needs grunt **and** bower |
+
+**bower pin — the one ecosystem deviation:**
+
+| Repo | bower | grunt |
+|---|---|---|
+| `insight-ui-pirate` | `~1.2.8` | `~0.4.2` |
+| `insight-ui-tent` | `~1.2.8` | `~0.4.2` |
+| `insight-ui-zen` | **`^1.8.8`** | `~0.4.2` |
+| `insight-ui-zero` (ours) | `~1.2.8` | `~0.4.2` |
+
+Horizen's `insight-ui-zen` is the **only** repo in the entire sweep that bumped
+bower (to `^1.8.8`, vs everyone else's `~1.2.8`). That is the single toolchain
+modernization any sibling made, and it is small. Everything else — grunt 0.4.2,
+gulp 3.8, AngularJS 1.5 / Bootstrap 3.1 — is identical 2018-era EOL tooling
+across Zero and all three siblings.
+
+### 6.2 Node pinning & engines — there is none
+
+| Signal | Finding across all 13 ecosystem repos |
+|---|---|
+| `.nvmrc` / `.node-version` / `.tool-versions` | **None.** Zero pin files anywhere — same as our own four repos. |
+| `package.json` `engines.node` | Only `insight-api-{pirate,tent,zen}` declare anything, and it is identically `>=0.12.0` — a 2016 BitPay inheritance, not a real floor. All other repos: absent. |
+| README Node prose | Every `bitcore-node-*` README carries the same **stale** 2016 text: *"Prerequisites: Node.js v0.10, v0.12 or v4."* None updated it to the Node-8 reality they actually run on. |
+
+So there is no pinning discipline to copy and no sibling that documents a
+known-good Node version. Our own [InsightBlock.md §4.0](InsightBlock.md#40-installing-from-scratch)
+("Node runtime: `nvm install 8.17.0`") is the **only** authoritative Node-version
+statement in the whole family — the siblings leave it implicit.
+
+### 6.3 Did Horizen's changes require a grunt/bower rebuild? Yes — verified.
+
+Question raised: were Horizen's recent `insight-ui-zen` changes source-level
+(needing the grunt/bower toolchain to take effect) or only template/HTML edits?
+Answer from the commit history (`ecosystem/Zen/insight-ui-zen`, HEAD `df08994`
+2023-02-09): **they ran grunt, and committed its output.** Horizen's workflow:
+
+1. Edit source — `public/src/js/controllers/*.js`, `public/src/css/common.css`, `po/*.po`.
+2. Run `grunt compile` — regenerating the served bundle: `public/js/{angularjs-all,main,vendors}.min.js`, `public/css/main.min.css`, `public/src/js/translations.js`.
+3. Commit the regenerated `*.min.js` / `*.min.css` artifacts, sometimes as a dedicated commit.
+
+The smoking guns: commit `51feef3` is titled literally **"grunt compile"** and
+contains *only* regenerated `public/js/*.min.js`; `ce51aa8` "Regenerate assets"
+rebuilt `main.min.css` + the three `min.js` bundles. Feature commit `1b69eaf`
+touched `public/src/js/controllers/transactions.js` (grunt source) and the
+rebuilt `main.min.js` followed.
+
+**Implication for the [§4.6](#46-visual--ux-improvements-to-pick-up-and-modern-explorers-worth-looking-at)
+UI refresh — the build wall is real and unavoidable:**
+
+- The UI serves the **built** `public/js/*.min.js` and `public/css/main.min.css`,
+  not the `public/src/` tree. Any edit under `public/src/{js,css}` only reaches
+  the browser after `grunt compile` regenerates those bundles. bower must be
+  present (it populates `public/lib` so grunt can concatenate `vendors.min.js`).
+- **The one escape hatch:** edits confined to `public/views/**/*.html` Angular
+  templates take effect with **no build** — templates are loaded at runtime. This
+  is exactly why our deployed `connection.html` banner fix (see
+  [InsightFix.md](InsightFix.md)) shipped clean without anyone running grunt.
+- Therefore a theme/component refresh (CSS + controllers under `public/src`) =
+  grunt territory, the same wall Horizen lived with. They never escaped it; they
+  just kept running grunt 0.4 / bower. Choosing the build path (host-side grunt
+  under the known-good nvm Node 8.17.0, or an off-host `node:8.17.0` Docker
+  build) is a prerequisite for anything deeper than template edits — see §6.4.
+
+### 6.4 Running the 2018 toolchain today
+
+Local system Node is modern (e.g. v25.x); the toolchain needs **Node 8.17.0**,
+and `npm install` of the native/gyp-heavy deps fails on Apple Silicon under
+modern Node. Two viable build environments:
+
+1. **Host-side (HOST) — path of least resistance.** The live host already has the
+   full source tree plus a working nvm **Node 8.17.0** — it *is* the documented,
+   known-good build environment. Run `npm install && bower install && grunt
+   compile` there under that Node. Subject to the standing rule: **no host write
+   without explicit go-ahead**, and the user controls service stop/start.
+2. **Off-host (local Mac) — Docker `node:8.17.0`.** The official prebuilt image
+   avoids compiling Node 8 on ARM. `docker run -v $PWD:/app -w /app node:8.17.0
+   sh -c 'npm install && bower install --allow-root && grunt compile'`. Robust
+   because it sidesteps both the ARM/Node-8 native-build failure and the missing
+   local `node_modules`. Note: `insight-ui-zero/node_modules` is **not** present
+   in the clone, and `public/lib` holds only `zeroclipboard` (not Angular /
+   Bootstrap), so **both** `npm install` and `bower install` are required before
+   `grunt compile` — a template-only edit needs neither.
+
+Per-repo Node selection without changing the system default: drop an `.nvmrc`
+(`8.17.0`) in the repo and `nvm use`, or run one-off via `nvm exec 8.17.0 <cmd>`.
+No sibling does this (§6.2); it would be a Zero-local convenience, not a port.
 
 ---
 

@@ -24,7 +24,7 @@ dying, archived on the host. Referenced captures:
 | `start11.tail` | 2026-06-20 | #2 EMFILE fd-leak |
 
 **Deploy status (2026-06-23).** The five-file backend batch and the UI banner fix
-(§4a) are **deployed and live** on tor2. Each backend file was `node --check`-clean
+(§4a) are **deployed and live** on HOST. Each backend file was `node --check`-clean
 (under the service's v8.17.0) and
 `diff -u`-verified against the deployed original before the swap; the deployed
 originals were backed up with a `.20260623-*` timestamp suffix (`cp -p`, preserving
@@ -73,7 +73,7 @@ carries the #2 fd-leak/backoff work (consolidated in §3 below).
 
 The UI banner fix (§4a) is also captured under `error/`, in a path-preserving
 subtree that mirrors its package layout, so `error/` is the complete source of
-record for everything installed on toru in this window:
+record for everything installed on HOST in this window:
 
 | File (`error/`) | Replaced (deployed) | Closes |
 |---|---|---|
@@ -204,7 +204,7 @@ so we never even build arrays we already know are too big.
 
 **Sizing — what the real worst case looks like.** The busiest addresses are the **founders / dev-fee reward
 addresses** (`vFoundersRewardAddress` in `chainparams.cpp`, local copy
-`/Users/walter/Work/ZK/Zero400/src/chainparams.cpp`); they take a slice of nearly
+`$ZERO/src/chainparams.cpp`, the local Zero daemon repo root); they take a slice of nearly
 every block subsidy. Measured against the deployed caps (chain tip block 2,479,518):
 
 | Founders # | Address | txApperances | UTXOs | `/utxo` result |
@@ -519,7 +519,7 @@ Standing constraint: nothing reaches the host without the user's explicit go-ahe
 
 ## 7. Monitoring — verifying the fixes hold
 
-Each fix has a cheap post-deploy check. Run these from the host (`ssh toru`); the
+Each fix has a cheap post-deploy check. Run these from the host (`ssh HOST`); the
 service runs as `bitcore.service` under systemd in **connect** mode.
 
 **Service health (covers #1, #2, #3 — any of them kills or restarts the process).**
@@ -577,3 +577,48 @@ check at the `/insight/` prefix.
 under the **service's** v8.17.0, not a bare `node` (which historically resolved to
 v8.10.0 on this host). Use the explicit path
 `/home/ubuntu/.nvm/versions/node/v8.17.0/bin/node`.
+
+---
+
+## To review — residual `zcashd` strings in `error/bitcoind.js`
+
+The staged orchestrator `error/bitcoind.js` mirrors what is **deployed**, so it is
+left byte-for-byte (do not retarget the `.js`/`.html` artifacts in `error/` as part
+of the docs pass). But it still carries inherited Zcash-era `zcashd` strings from
+the str4d lineage. These are flagged here for a future *code* review, not a doc edit:
+
+| Line | Text | Kind | Risk |
+|---|---|---|---|
+| **876** | `var pidPath = spawnOptions.datadir + '/zcashd.pid'` | **filesystem path** | **URGENT** |
+| 345-347 | `'...in zcashd config options'` (×3 checkArgument) | error string | cosmetic |
+| 431 | `'...zcashd is undergoing a reindex.'` | log warn | cosmetic |
+| 976 | `'Stopping while trying to spawn zcashd.'` | error string | cosmetic |
+| 1015 | `'Stopping while trying to connect to zcashd.'` | error string | cosmetic |
+| 2253 | `'zcashd spawned process exited with status code: '` | error string | cosmetic |
+| 2265 | `'zcashd process did not exit'` | error string | cosmetic |
+
+**Line 876 is urgent and not cosmetic — confirmed wrong.** It is the actual
+pidfile path the orchestrator watches in the data directory:
+
+```js
+var pidPath = spawnOptions.datadir + '/zcashd.pid';
+```
+
+On HOST the data directory is `~/.zero` and the daemon writes **`zerod.pid`** —
+there is **no `~/.zcash` and no `zcashd.pid`** anywhere. So this lookup targets a
+file that does not exist. The pidfile-based liveness / clean-shutdown check keyed
+on `pidPath` therefore never matches; the code falls through to whatever fallback
+path it has (the spawned-process handle), masking the bug — which is why it has not
+surfaced as a crash. The fix is a one-line retarget:
+
+```js
+var pidPath = spawnOptions.datadir + '/zerod.pid';
+```
+
+It is still a **behavioral** change to a deployed artifact, not a doc edit, so it
+belongs to a code review + redeploy of `bitcoind.js` (do not edit the `error/`
+copy as part of the docs pass). When made, re-verify the orchestrator correctly
+reads `zerod.pid` from `~/.zero` after restart.
+
+The remaining lines (345-347, 431, 976, 1015, 2253, 2265) are user-facing message
+text only; safe to retarget `zcashd`→`zerod` in the same revision.

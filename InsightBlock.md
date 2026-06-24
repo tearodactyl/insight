@@ -94,7 +94,7 @@ runtime is not here — it is the nvm install at
 (v8.10.0) is unused and must never be resolved by `env node` — the unit pins the
 absolute path to avoid exactly that, §4.2. The CLI is a separate trap: `~/.bashrc`
 sources nvm *below* its `[ -z "$PS1" ] && return` guard, so a non-interactive
-`ssh tor2 'node …'` skips nvm and falls through to v8.10.0. Before deploy, run
+`ssh HOST 'node …'` skips nvm and falls through to v8.10.0. Before deploy, run
 `node --check` with the absolute v8.17.0 path, not a bare `node`.
 
 ### 2.2 zerod datadir
