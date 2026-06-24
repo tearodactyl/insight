@@ -622,3 +622,25 @@ reads `zerod.pid` from `~/.zero` after restart.
 
 The remaining lines (345-347, 431, 976, 1015, 2253, 2265) are user-facing message
 text only; safe to retarget `zcashd`→`zerod` in the same revision.
+
+## To review — code comments on the crash fixes
+
+The crash-fix commits carry explanatory comments in the source (the `Crash #3
+hardening` / `Crash #4 fix` blocks and the ZMQ size/parse-guard notes). Review them
+for accuracy and tone before any public push:
+
+- **Numbering consistency.** `addresses.js` says `Crash #3`, `currency.js` says
+  `Crash #4`; the ZMQ inv-tx / rawtx parse guards (`index.js`, `bitcoind.js`,
+  `transaction.js`) carry no number. Confirm the #N scheme matches section 1's
+  crash summary, or drop the numbers if they don't map cleanly.
+- **Calibration figures.** The `addresses.js` comment cites specific live numbers
+  (≈79.5k txAppearances/UTXOs, ≈30 MB body, 50 MB ceiling). Confirm those are
+  still representative, or soften to ranges so they don't read as stale once the
+  busiest address grows.
+- **Host-specific detail.** Comments reference systemd `Restart=on-failure`,
+  Node 8.17's bundled CA roots, and OS CA paths. Keep only what's true of the
+  deployed host; trim anything that won't generalize for public readers.
+
+Affected files: `lib/transaction/transaction.js` (lib), `lib/services/bitcoind.js`
+(node), `lib/addresses.js` / `lib/currency.js` / `lib/index.js` (api). Comment
+review only — no behavioral change.
