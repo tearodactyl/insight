@@ -1,0 +1,103 @@
+/* samples/css/custom.css — Zero light "ice-blue" palette/type override
+ * (SAMPLE, no-rebuild)
+ *
+ * Additive override layered AFTER css/main.min.css via one extra <link> in a
+ * sampled index.html. Touches NO LESS source and needs NO grunt rebuild — it
+ * only re-tints existing selectors. Roll back by removing the <link>.
+ *
+ * Design note: this is a LIGHT theme, deliberately. The base main.min.css is
+ * light; tinting the page surface a very pale cool blue works WITH that
+ * cascade (existing dark text / borders / Bootstrap components keep working),
+ * instead of fighting it like a dark inversion would. The ice-blue + warm-gold
+ * pairing echoes the Arctic glacier-lagoon palette of the Zero wallet
+ * reference. Palette is approximate / sampled-by-eye — tune later if a spec
+ * lands.
+ *
+ *   --zero-bg      #eef4f9   page background (very, very light ice blue)
+ *   --zero-panel   #ffffff   table/panel surface (pure white, lifts off bg)
+ *   --zero-gold    #d9b227   accent: brand + active nav only (NOT links)
+ *                            (a touch darker than the wallet ring so it has
+ *                             contrast on a light background)
+ *   --zero-gold-d  #b89420   gold hover/active (darker)
+ *   --zero-text    #1f2933   primary text (near-black slate, not pure black)
+ *   --zero-muted   #6b7480   secondary/label text
+ *   --zero-line    #dbe4ec   hairline borders (faint blue-grey)
+ *   --zero-link    #1a5e9c   links: deep blue that contrasts the ice-blue bg
+ *   --zero-link-h  #0f3f6e   link hover/focus (darker navy)
+ *
+ * CSS custom properties degrade gracefully; literal fallbacks follow each use
+ * so this still renders on the app's older runtime if vars are unsupported.
+ */
+:root {
+  --zero-bg: #eef4f9;
+  --zero-panel: #ffffff;
+  --zero-gold: #d9b227;
+  --zero-gold-d: #b89420;
+  --zero-text: #1f2933;
+  --zero-muted: #6b7480;
+  --zero-line: #dbe4ec;
+  /* Links stay blue (not gold) — just deep enough to contrast the ice-blue
+   * page surface; darker still on hover. Gold is reserved for brand / active
+   * nav, so link color is intentionally decoupled from --zero-gold. */
+  --zero-link: #1a5e9c;
+  --zero-link-h: #0f3f6e;
+}
+
+/* ---- base surface + type ------------------------------------------------ */
+body {
+  background: #eef4f9;
+  background: var(--zero-bg);
+  color: #1f2933;
+  color: var(--zero-text);
+  /* Ubuntu is already loaded in index.html:15 — no new font dependency. */
+  font-family: "Ubuntu", -apple-system, "Segoe UI", Roboto, sans-serif;
+}
+
+h1, h2, h3, h4, .page-header { color: #1f2933; color: var(--zero-text); }
+.text-muted, .text-right small { color: #6b7480 !important; color: var(--zero-muted) !important; }
+hr, .page-header { border-color: #dbe4ec; border-color: var(--zero-line); }
+
+/* ---- links (deep blue, darker on hover) --------------------------------- */
+a, a:visited { color: #1a5e9c; color: var(--zero-link); }
+a:hover, a:focus { color: #0f3f6e; color: var(--zero-link-h); }
+
+/* ---- navbar / brand ----------------------------------------------------- */
+/* Keep the navbar a clean white bar over the ice-blue page, gold brand. */
+.navbar { background: #ffffff; background: var(--zero-panel); border-color: #dbe4ec; border-color: var(--zero-line); }
+.navbar-brand, .navbar .navbar-brand { color: #d9b227 !important; color: var(--zero-gold) !important; font-weight: 700; letter-spacing: .08em; }
+.navbar-nav > li > a { color: #1f2933; color: var(--zero-text); }
+.navbar-nav > li > a:hover { color: #d9b227; color: var(--zero-gold); }
+/* active nav item: gold underline, matching the wallet's active-tab cue */
+.navbar-nav > li.active > a,
+.navbar-nav > li > a.active {
+  color: #d9b227; color: var(--zero-gold);
+  border-bottom: 2px solid #d9b227; border-bottom: 2px solid var(--zero-gold);
+}
+
+/* ---- panels / tables (the Label | value rows) --------------------------- */
+.panel, .well, #status .col-gray, .col-gray {
+  background: #ffffff; background: var(--zero-panel);
+  border-color: #dbe4ec; border-color: var(--zero-line);
+}
+.table > tbody > tr > td,
+.table > thead > tr > th { border-top-color: #dbe4ec; border-top-color: var(--zero-line); }
+.table-hover > tbody > tr:hover { background: rgba(217, 178, 39, .06); } /* faint gold row hover */
+
+/* ---- hash readability: tabular monospace on the most-read elements ------ */
+.ellipsis, td.ellipsis, .hash, a[href^="block/"], a[href^="tx/"], a[href^="address/"] {
+  font-family: "Ubuntu Mono", "SFMono-Regular", Menlo, Consolas, monospace;
+  letter-spacing: .01em;
+}
+
+/* ---- active currency highlight in the dropdown -------------------------- */
+.dropdown-menu > li > a.active,
+.dropdown-menu > li > a.active:hover {
+  color: #d9b227; color: var(--zero-gold);
+  background: rgba(217, 178, 39, .08);
+}
+
+/* ---- search box focus affordance ---------------------------------------- */
+#search:focus, .form-control:focus {
+  border-color: #d9b227; border-color: var(--zero-gold);
+  box-shadow: 0 0 0 2px rgba(217, 178, 39, .25);
+}

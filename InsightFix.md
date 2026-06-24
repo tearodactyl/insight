@@ -214,8 +214,20 @@ every block subsidy. Measured against the deployed caps (chain tip block 2,479,5
 | 3 | `t3aWmHqBGS7watoKQLa7uykeTaYHoYqM361` | 800,005 | 800,003 | **413** (~17.8 s, ~210 MB → **would OOM** if served whole) |
 | 4 | `t3hsi89hPsZzmnbs3pny6cfAxMxV5TJLErj` | 79,510 | 79,513 | 200 (~20.7 MB, 1.73 s) — calibration whale |
 
-Per-UTXO API object (`transformUtxo`) ≈ 260-280 B serialized, so 100k UTXOs ≈
-26-38 MB (under the 50 MB wall) and #3 served whole (~210 MB) is exactly the
+**How the 100k cap maps to bytes.** A single serialized `/utxo` element
+(`transformUtxo`: address, txid, vout, scriptPubKey hex, amount, satoshis, height,
+confirmations) is **≈ 260–280 B** — the empirical unit rate. Two anchors hold this:
+
+- *Measured:* whale #4 (79,513 UTXOs) returned a full **~20.7 MB** body (200, 1.73 s).
+  That back-solves to 20.7 MB ÷ 79,513 ≈ **273 B/UTXO**, squarely in the 260–280 B band.
+- *Calculated:* at the `MAX_UTXOS = 100,000` cap, 100k × 260–280 B ≈ **26–38 MB** — the
+  full range, still under the 50 MB ceiling with margin. (The `addresses.js` source
+  comment currently rounds the #4 body to "~30 MB" and cites only the 38 MB top of the
+  range; the measured figure is 20.7 MB — a comment fix is tracked in §5.)
+
+So 100k is the largest count cap that *cannot* breach the byte ceiling even at the
+280 B upper bound, while still serving the common-large whale class whole. By
+contrast #3 served whole (~210 MB ≈ 800,003 × 263 B) is exactly the
 crash-#3 abort. **Decision: keep caps at 100k.** Do NOT raise them to serve #2/#3 in
 full — that re-introduces the OOM we just closed. Note the cap currently rejects
 only *after* the node returns the full UTXO set, so the 413 path is slow on the
