@@ -261,13 +261,13 @@ the readiness signal to poll.
 
 Two layers cover the gap:
 
-1. **bitcore retries through warmup.** `_loadTipFromNode` (`error/bitcoind.js:852`)
+1. **bitcore retries through warmup.** `_loadTipFromNode` (`bitcoind.js:852`)
    calls `getBestBlockHash`, recognizes `err.code === -28`, logs the warmup message
    at warn, and returns the error so `async.retry` tries again
-   (`error/bitcoind.js:855-857`). The budget is `startRetryCount × interval` —
-   stock 60 × 5 s = 5 min. The staged hardening replaces the flat loop
+   (`bitcoind.js:855-857`). The budget is `startRetryCount × interval` —
+   stock 60 × 5 s = 5 min. The hardening replaces the flat loop
    with capped exponential backoff and a single give-up `log.error`
-   (`error/bitcoind.js:762-784`). Repeated warn lines carrying zerod's
+   (`bitcoind.js:762-784`). Repeated warn lines carrying zerod's
    `-28` message in the journal during initial sync are the expected signature, not
    a fault.
 2. **systemd retries the unit.** When the in-process budget is exhausted, bitcore
@@ -621,12 +621,11 @@ version matrix and walls are in InsightPort.md.
   directive semantics — the `StartLimit*` move, `append:` availability. Re-check the
   units with `systemd-analyze verify` after any systemd upgrade.
 - **Node / npm dependency tree.** Frozen circa 2021 on Node 8; 8→10 is the wall,
-  forcing native rebuilds of zeromq, leveldown, and secp256k1. Do not swap
-  dependency versions in place the way the staged `error/*.js` source files are
-  swapped — a version bump such as bn.js 2.x→5.x needs `npm install` plus the lib
-  test suite plus smoke tests; track each as its own test-gated change. The crash
-  fixes in `error/` are deliberately decoupled from any dependency upgrade so they
-  ship independently.
+  forcing native rebuilds of zeromq, leveldown, and secp256k1. A dependency version
+  bump such as bn.js 2.x→5.x is **not** a simple edit — it needs `npm install` plus
+  the lib test suite plus smoke tests; track each as its own test-gated change. The
+  crash fixes are pure source-level hardening, decoupled from any dependency
+  upgrade, so the two ship independently.
 
 Upgrade discipline: snapshot `bitcore-node.json` and the units, note the height
 (`zero-cli getblockcount`), `sudo systemctl stop bitcore` then `zerod`, upgrade,
@@ -723,20 +722,20 @@ in-process reconnection.
 
 ### A.3 RPC warmup and the tip loader
 
-`_loadTipFromNode` (`error/bitcoind.js:852`) calls `getBestBlockHash`, special-cases
-`err.code === -28` (the warmup rejection), logs at warn, and returns the error so
-`async.retry` retries. The staged hardening (`error/bitcoind.js:762-784`; crash #1)
-replaces the flat retry loop with capped exponential backoff and a single give-up
-`log.error`.
+`_loadTipFromNode` (in `bitcore-node-zero/lib/services/bitcoind.js:852`) calls
+`getBestBlockHash`, special-cases `err.code === -28` (the warmup rejection), logs at
+warn, and returns the error so `async.retry` retries. The hardening
+(`bitcoind.js:762-784`; crash #1) replaces the flat retry loop with capped
+exponential backoff and a single give-up `log.error`.
 
 ### A.4 Crash catalog
 
 The crashes referenced by number in the code notes. Full signatures, `.tail`
-captures, and staged `error/*.js` fixes are in InsightFix.md.
+captures, and the fixes are in InsightFix.md.
 
 | # | Signature | Notes |
 |---|---|---|
-| 1 | `RangeError` in the tx parser | parsing untrusted P2P/tx data; staged backoff at `error/bitcoind.js:762-784` |
+| 1 | `RangeError` in the tx parser | parsing untrusted P2P/tx data; backoff at `bitcoind.js:762-784` |
 | 2 | `EMFILE` | spawn-mode fd exhaustion from an orphaned-then-relaunched zerod |
 | 3 | `JS heap out of memory` | Node v8 heap limit |
 | 4 | `certificate has expired` | non-fatal |

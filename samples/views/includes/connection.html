@@ -20,10 +20,6 @@
 
   </div>
 
-  <!-- SAMPLE #1: positive heartbeat as a green alert box, symmetric with the
-       red alert-danger above. The shipped template only ever renders the failure
-       side, so a healthy node shows nothing. Semantic color only (green=ok),
-       alert-success is already in the bundle. Plain text — no new gettext key. -->
   <div class="alert alert-success" data-ng-show="apiOnline && serverOnline && clienteOnline">
     <span class="glyphicon glyphicon-ok"></span>
     <strong>Live</strong>

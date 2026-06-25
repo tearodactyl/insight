@@ -1,55 +1,22 @@
-/* samples/css/custom.css — Zero light "ice-blue" palette/type override
- * (SAMPLE, no-rebuild)
- *
- * Additive override layered AFTER css/main.min.css via one extra <link> in a
- * sampled index.html. Touches NO LESS source and needs NO grunt rebuild — it
- * only re-tints existing selectors. Roll back by removing the <link>.
- *
- * Design note: this is a LIGHT theme, deliberately. The base main.min.css is
- * light; tinting the page surface a very pale cool blue works WITH that
- * cascade (existing dark text / borders / Bootstrap components keep working),
- * instead of fighting it like a dark inversion would. Palette is a single
- * ice-blue family: a cool grey-blue page surface, white panels, deep-blue
- * links/accents. Sampled-by-eye — tune later if a spec lands.
- *
- *   --zero-bg      #eef1f4   page background (very, very light ice blue)
- *   --zero-panel   #ffffff   table/panel surface (pure white, lifts off bg)
- *   --zero-text    #1f2933   primary text (near-black slate, not pure black)
- *   --zero-muted   #6b7480   secondary/label text
- *   --zero-line    #dbe4ec   hairline borders (faint blue-grey)
- *   --zero-link    #1a5e9c   links + accents: deep blue against the ice-blue bg
- *   --zero-link-h  #0f3f6e   link hover/focus (darker navy)
- *
- * CSS custom properties degrade gracefully; literal fallbacks follow each use
- * so this still renders on the app's older runtime if vars are unsupported.
- */
+/* samples/css/custom.css — Zero light "ice-blue" override (no-rebuild).
+ * Layered after main.min.css; re-tints existing selectors only.
+ * Literal fallbacks precede each var() for the app's older runtime. */
 :root {
-  /* Production icy page surface: faint cool grey-blue, NO violet. The trap is
-   * R=G with blue maxed (#cdd6f4, #dde9f1, #eeeeff) — that imbalance reads
-   * baby-blue or magenta/lavender. Here R<G<B with blue NOT maxed
-   * (ee/f1/f4) keeps the tint a cold grey-blue whisper: icy, austere, no purple
-   * cast, still off-white against the #fff panels. */
-  --zero-bg: #eef1f4;
+  --zero-bg: #eef1f4;     /* page surface: faint cool grey-blue */
   --zero-panel: #ffffff;
   --zero-text: #1f2933;
   --zero-muted: #6b7480;
   --zero-line: #dbe4ec;
-  /* Links + all accents: deep blue, just enough to contrast the ice-blue page
-   * surface; darker still on hover. */
   --zero-link: #1a5e9c;
   --zero-link-h: #0f3f6e;
 }
 
 /* ---- base surface + type ------------------------------------------------ */
 body {
-  /* !important + literal value first: forces the override even though
-   * main.min.css sets `body{background-color:#fff}` (the prior "no visible
-   * change" cause). Production icy value — light ice blue, visible on #fff. */
-  background: #eef1f4 !important;
+  background: #eef1f4 !important;  /* !important: beats main.min.css body{background:#fff} */
   background: var(--zero-bg) !important;
   color: #1f2933;
   color: var(--zero-text);
-  /* Ubuntu is already loaded in index.html:15 — no new font dependency. */
   font-family: "Ubuntu", -apple-system, "Segoe UI", Roboto, sans-serif;
 }
 
@@ -61,32 +28,16 @@ hr, .page-header { border-color: #dbe4ec; border-color: var(--zero-line); }
 a, a:visited { color: #1a5e9c; color: var(--zero-link); }
 a:hover, a:focus { color: #0f3f6e; color: var(--zero-link-h); }
 
-/* ---- navbar / brand ----------------------------------------------------- */
-/* Leave the navbar BLACK as designed: main.min.css sets
- * `.navbar-default{background-color:#000000}` with near-white links (#F4FBE8)
- * and a white brand — a coherent dark bar. An earlier attempt to force it white
- * created white-on-white invisible links, so we don't touch the navbar surface
- * or link colors here. The selected-item cue is the white/black inversion below.
- * See [[custom-css-cascade-important]]. */
-
-/* ---- selected (active) nav item: black/white only, legible in every state - */
-/* Top bar is black with white links. The selected item ('active' on the <li>
- * via `data-ng-class="{active:$uiRoute}"`) otherwise renders DARK on the black
- * bar: the base green rule
- *   .navbar-nav>.active>a, ...>.active>a:focus { background:#6C9032; color:#fff }
- * isn't reliably winning, and the base HOVER rule sets ONLY a background, NO
- * color
- *   .navbar-nav>li>a:hover, ...>.active>a:hover { background-color:#fff }
- * so hovering a selected item lands white text on a white bg.
- * Fix: invert the selected item to a white background + black text — a clear
- * "pressed" state — held through rest / hover / focus so it never goes
- * white-on-white or dark-on-black. !important beats the base active/hover rules
- * and the #000 bar. See [[custom-css-cascade-important]]. */
+/* ---- navbar: selected item blends into the black bar, white text --------- */
+/* Active chip = the bar's own #000 with #fff text, ALL three states. Base sets
+ * active bg #6C9032 but its :hover rule drops bg to #fff with no color, so the
+ * text fell back to dark = invisible. Pin bg #000 + color #fff on every state so
+ * it never lands on white. !important beats the base rules. */
 .navbar-default .navbar-nav > .active > a,
 .navbar-default .navbar-nav > .active > a:hover,
 .navbar-default .navbar-nav > .active > a:focus {
-  background-color: #fff !important;  /* selected: white bg, all states */
-  color: #000 !important;             /* selected: black text, all states */
+  background-color: #000 !important;
+  color: #fff !important;
 }
 
 /* ---- panels / tables (the Label | value rows) --------------------------- */
@@ -98,12 +49,9 @@ a:hover, a:focus { color: #0f3f6e; color: var(--zero-link-h); }
 .table > thead > tr > th { border-top-color: #dbe4ec; border-top-color: var(--zero-line); }
 .table-hover > tbody > tr:hover { background: rgba(26, 94, 156, .06); } /* faint blue row hover */
 
-/* ---- hash readability: keep the most-read elements in Ubuntu ------------ */
-/* Was "Ubuntu Mono" — but only "Ubuntu" is loaded (index.html), so Ubuntu Mono
- * fell back to Menlo/Consolas/generic monospace, a visible font swap. Use the
- * loaded Ubuntu so these match the rest of the page (no mono fallback). */
+/* ---- hashes: use loaded Ubuntu (Ubuntu Mono isn't loaded) --------------- */
 .ellipsis, td.ellipsis, .hash, a[href^="block/"], a[href^="tx/"], a[href^="address/"] {
-  font-family: Ubuntu, sans-serif;  /* match the base nav rule's font stack */
+  font-family: Ubuntu, sans-serif;
   letter-spacing: .01em;
 }
 
@@ -114,20 +62,13 @@ a:hover, a:focus { color: #0f3f6e; color: var(--zero-link-h); }
   background: rgba(26, 94, 156, .08);
 }
 
-/* ---- unify the two top green boxes -------------------------------------- */
-/* The header has two green boxes that base CSS gives DIFFERENT shades, which
- * made the white search text hard to read:
- *   - search input  .navbar-form .form-control  background #7CAD23 (bright
- *                   yellow-green) + white text  -> poor contrast
- *   - conn/status   .status                      background #597338 (darker
- *                   olive) + #eee text          -> readable
- * Unify BOTH to the darker olive (#597338) with white text so they match and
- * the search text is legible. !important is required: base .navbar-form
- * .form-control is a two-selector rule that beats a bare #search.
- * See [[custom-css-cascade-important]]. */
+/* ---- unify the two top green boxes to the darker olive ------------------ */
+/* Base gives the search input #7CAD23 (poor white-text contrast) and the
+ * conn/status box #597338. Match both to #597338. !important: base .navbar-form
+ * .form-control outranks a bare #search. */
 .navbar-form .form-control,
 #search {
-  background-color: #597338 !important; /* match the conn/status box */
+  background-color: #597338 !important;
   color: #fff !important;
 }
 /* placeholder: lighten slightly so it reads on the darker olive */

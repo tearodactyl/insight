@@ -1,5 +1,12 @@
 # InsightDeploy — Step-by-step deploy & validation of the five staged fixes
 
+> **INTERNAL — not for distribution.** This is the in-place hot-patch runbook for
+> *our* running host: promote the patched `error/` files into the live `node_modules`
+> tree without a full redeploy, back up each original, keep a rollback. Public-facing
+> admins do **not** use this — they clone the updated `insight` + `bitcore` repos
+> (fixes already merged) and follow the normal install/config path. This file is
+> kept operator-side only, alongside [InsightInternal.md](InsightInternal.md).
+
 Operational runbook for promoting the five hardened files in
 [`error/`](error/) into the live `node_modules` tree on the explorer host
 (`HOST`, reached via `ssh HOST`). Companion to
@@ -14,12 +21,12 @@ bitcore restart re-attaches to the running zerod and never disturbs the chain.
 
 ---
 
-## 0. Host facts (verified 2026-06-23)
+## 0. Host facts
 
 | Fact | Value |
 |---|---|
 | Host | `HOST` (the explorer host; run these commands on it) |
-| Staged copies | `/home/ubuntu/zero/insight/error/<file>` (repo clone @ `eeee7ec`) |
+| Staged copies | `/home/ubuntu/zero/insight/error/<file>` (the docs repo clone) |
 | Deploy root | `/home/ubuntu/zero/mynode/node_modules/` |
 | Service node | **`/home/ubuntu/.nvm/versions/node/v8.17.0/bin/node`** (from `bitcore.service` `ExecStart`) |
 | ⚠ default-PATH node | `v8.10.0` — **do not** use it for `node --check`; pin v8.17.0 |

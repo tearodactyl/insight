@@ -3,18 +3,18 @@
 Companion to [InsightBlock.md](InsightBlock.md) (the central operations reference)
 and [InsightPort.md](InsightPort.md) (lineage, ecosystem, versions, porting).
 
-This document is the tight, operational record of how the Zero Insight explorer
-(`bitcore` process, Node v8.17.0) has crashed in production, what the
-captured logs show, and the fixes — the **five-file backend batch (now deployed
-2026-06-23)**, a **UI banner fix beyond that batch** (§4a), and the **rest still to
-merge**. Each fix records the *shape* of the change and why, with short snippets,
-and points at the files in `error/` (backend) and `insight-ui-zero/public/` (UI) by
-line number.
+This document is the operational record of how the Zero Insight explorer
+(`bitcore` process, Node v8.17.0) crashes in production, what each crash's log
+signature looks like, and the fix in place for it. Each entry gives the signature,
+when the bug was introduced and how often it fires, the root cause, and the *shape*
+of the current fix with short snippets, pointing at the source file and line. The
+fixes are in the code — a fresh `npm install` of the Zero `bitcore`/`insight`
+packages carries them; no manual file surgery is needed.
 
 **Source of truth for the crashes:** saved log tails of the `bitcore` process
-dying, archived on the host. Referenced captures:
+dying. The captures, with when each crash was observed:
 
-| Capture | Date | Crash it documents |
+| Capture | Observed | Crash it documents |
 |---|---|---|
 | `rangeError.save` | 2022-09 | #1 tx-parser `RangeError` |
 | `start2.tail` | 2022-09 | #1 (recurrence) |
@@ -23,64 +23,48 @@ dying, archived on the host. Referenced captures:
 | `start6.tail` | 2025-06 | #3 JS-heap OOM |
 | `start11.tail` | 2026-06-20 | #2 EMFILE fd-leak |
 
-**Deploy status (2026-06-23).** The five-file backend batch and the UI banner fix
-(§4a) are **deployed and live** on HOST. Each backend file was `node --check`-clean
-(under the service's v8.17.0) and
-`diff -u`-verified against the deployed original before the swap; the deployed
-originals were backed up with a `.20260623-*` timestamp suffix (`cp -p`, preserving
-mode/mtime) before being overwritten. The edited copies remain under `error/`
-(backend) and `insight-ui-zero/public/` (UI) as the source of record. Standing
-constraint: nothing reaches the host without the user's explicit go-ahead. See
-[InsightBlock.md §5](InsightBlock.md#5-recovery) for rollback.
-
 ---
 
 ## 1. The four production crash signatures (summary)
 
-| # | Signature | First seen | Fatal? | Root cause | Fix status |
+| # | Signature | First seen | Fatal? | Root cause | Fix (source file) |
 |---|---|---|---|---|---|
-| 1 | `RangeError: Index out of range` in tx parser | 2022-09 (recurs ×2 2022-09, 2023-06; absent 2024–2026) | Yes — kills process | Malformed/truncated tx buffer off the ZMQ `rawtx` topic makes `Transaction.fromBuffer` read past the end; the throw is uncaught in the event handler. **Two doors** (inv path + rawtx path). | **Deployed 2026-06-23:** `error/index.js`, `error/bitcoind.js`, `error/transaction.js` |
-| 2 | `Error: EMFILE: too many open files` | 2026-06-20 | Yes | Stale datadir lock → ~5 s restart loop leaks ZMQ sockets/fds until `ulimit -n`. `startRetryCount: 60` made it worse. | **Resolved two ways:** root cause removed by connect-mode cutover (live 2026-06-22); fd-leak + backoff hardened in `error/bitcoind.js` (**deployed 2026-06-23**) |
-| 3 | `FATAL ERROR: ... JS heap out of memory` (abort + core) | 2025-06 | Yes | One Express `response.send()` builds a ~163 MB string (163144806 bytes, `response.js:107`) — oversized unpaginated API response — past the ~1.4 GB Node-8 heap. | **Deployed 2026-06-23:** `error/addresses.js` (caps 100k/100k, 50 MB ceiling) |
-| 4 | `Error: certificate has expired` | 2024-05 (repeats ~10 min) | No — kept serving | Outbound price-feed TLS fails under Node 8.17's stale bundled CA roots. | **Deployed 2026-06-23:** `error/currency.js` |
+| 1 | `RangeError: Index out of range` in tx parser | 2022-09 (recurs ×2 2022-09, 2023-06; absent 2024–2026) | Yes — kills process | Malformed/truncated tx buffer off the ZMQ `rawtx` topic makes `Transaction.fromBuffer` read past the end; the throw is uncaught in the event handler. **Two doors** (inv path + rawtx path). | `insight-api-zero/lib/index.js`, `bitcore-node-zero/lib/services/bitcoind.js`, `bitcore-lib-zero/lib/transaction/transaction.js` |
+| 2 | `Error: EMFILE: too many open files` | 2026-06-20 | Yes | Stale datadir lock → ~5 s restart loop leaks ZMQ sockets/fds until `ulimit -n`. `startRetryCount: 60` made it worse. | Two-fold: root cause removed by running in connect mode (zerod owned by systemd, no respawn loop); fd-leak + backoff hardened in `bitcore-node-zero/lib/services/bitcoind.js` |
+| 3 | `FATAL ERROR: ... JS heap out of memory` (abort + core) | 2025-06 | Yes | One Express `response.send()` builds a ~163 MB string (163144806 bytes, `response.js:107`) — oversized unpaginated API response — past the ~1.4 GB Node-8 heap. | `insight-api-zero/lib/addresses.js` (caps 100k/100k, 50 MB ceiling) |
+| 4 | `Error: certificate has expired` | 2024-05 (repeats ~10 min) | No — kept serving | Outbound price-feed TLS fails under Node 8.17's stale bundled CA roots. | `insight-api-zero/lib/currency.js` |
 
 The Node-8 / OpenSSL-1.0.2 constraint behind #4 (and the upgrade wall) is documented
 in [InsightPort.md](InsightPort.md) §2. The lock-file mechanics behind #2 are in
 [InsightBlock.md §5.2](InsightBlock.md#52-lock-files). Those are not repeated here.
 
-**Beyond the crash batch:** a UI cosmetic fix — the offline banner said "zcashd"
-(un-rethemed inheritance from str4d's Zcash Insight fork) and now says "zerod" — was
-deployed in the same window. It is not a crash signature, so it lives in §4a, not
-this table.
+**Not a crash:** a UI cosmetic fix — the offline banner inherited "zcashd" text from
+the str4d Zcash Insight fork and now reads "zerod" — lives in §4a, not this table.
 
 ---
 
-## 2. The backend batch (source of record in `error/`, deployed 2026-06-23)
+## 2. The backend fixes (by source file)
 
-Five files, all `node --check`-clean and diffed against the deployed originals
-before the swap; the edited copies remain under `error/` as the source of record.
-Three of them (`index.js`, `bitcoind.js`, `transaction.js`) together close crash
-#1; `addresses.js` closes #3; `currency.js` closes #4. `bitcoind.js` additionally
+The hardening lives in five backend files across the Zero packages. Three of them
+(`index.js`, `bitcoind.js`, `transaction.js`) together close crash #1;
+`addresses.js` closes #3; `currency.js` closes #4. `bitcoind.js` additionally
 carries the #2 fd-leak/backoff work (consolidated in §3 below).
 
-| File (`error/`) | Replaced (deployed) | Closes | Lines |
-|---|---|---|---|
-| `error/index.js` | `insight-api-zero/lib/index.js` | #1 inv door | 347 |
-| `error/bitcoind.js` | `bitcore-node-zero/lib/services/bitcoind.js` | #1 rawtx door, #2 fd-leak/backoff | 2273 |
-| `error/transaction.js` | `bitcore-lib-zero/lib/transaction/transaction.js` | #1 diagnostic context | 1415 |
-| `error/addresses.js` | `insight-api-zero/lib/addresses.js` | #3 OOM | 285 |
-| `error/currency.js` | `insight-api-zero/lib/currency.js` | #4 cert | 116 |
+| Source file | Closes |
+|---|---|
+| `insight-api-zero/lib/index.js` | #1 inv door |
+| `bitcore-node-zero/lib/services/bitcoind.js` | #1 rawtx door, #2 fd-leak/backoff |
+| `bitcore-lib-zero/lib/transaction/transaction.js` | #1 diagnostic context |
+| `insight-api-zero/lib/addresses.js` | #3 OOM |
+| `insight-api-zero/lib/currency.js` | #4 cert |
 
-The UI banner fix (§4a) is also captured under `error/`, in a path-preserving
-subtree that mirrors its package layout, so `error/` is the complete source of
-record for everything installed on HOST in this window:
+The UI banner fix (§4a) is one template:
 
-| File (`error/`) | Replaced (deployed) | Closes |
-|---|---|---|
-| `error/insight-ui-zero/public/views/includes/connection.html` | same path under deployed `node_modules` | §4a banner text + `translate` directive removal |
+| Source file | Closes |
+|---|---|
+| `insight-ui-zero/public/views/includes/connection.html` | §4a banner text + `translate` directive removal |
 
-A single template file (md5 `58094a9a`, byte-identical to the deployed copy). The
-banner fix needs no catalog or bundle change — see §4a for why.
+The banner fix needs no catalog or bundle change — see §4a for why.
 
 ### 2.1 Crash #1 — tx-parser `RangeError` (two doors)
 
@@ -110,15 +94,14 @@ the size check but are still malformed (bad varint counts). One bad frame is
 logged and dropped instead of killing the process. **Crash #1 has two doors and
 both must be shut** — deploying only one leaves the other wide open:
 
-- **Door 1 — inv path** (`insight-api-zero/lib/index.js`). Staged in
-  `error/index.js`: constants `InsightAPI.MIN_TX_BYTES = 10` / `MAX_TX_BYTES = 2 MB`
-  (`error/index.js:294`), guard + try/catch in `transactionEventHandler`
-  (`error/index.js:297-320`). Logger is reached as `this.node.log` (there is no
-  top-level `log` in that file; inside the handler `this` is the InsightAPI
-  instance):
+- **Door 1 — inv path** (`insight-api-zero/lib/index.js`): constants
+  `InsightAPI.MIN_TX_BYTES = 10` / `MAX_TX_BYTES = 2 MB` (`index.js:294`), guard +
+  try/catch in `transactionEventHandler` (`index.js:297-320`). Logger is reached as
+  `this.node.log` (there is no top-level `log` in that file; inside the handler
+  `this` is the InsightAPI instance):
 
   ```js
-  // error/index.js — transactionEventHandler
+  // insight-api-zero/lib/index.js — transactionEventHandler
   if (!Buffer.isBuffer(txBuffer) ||
       txBuffer.length < InsightAPI.MIN_TX_BYTES ||
       txBuffer.length > InsightAPI.MAX_TX_BYTES) {
@@ -134,18 +117,17 @@ both must be shut** — deploying only one leaves the other wide open:
   }
   ```
 
-- **Door 2 — rawtx path** (`bitcore-node-zero/lib/services/bitcoind.js._zmqTransactionHandler`).
-  This is the door **nobody had fixed** — it parses every rawtx ZMQ frame
-  via `tx.fromString(message)` with no size check and no try/catch, so the same
-  `RangeError` kills the process independently of the inv fix. Staged in
-  `error/bitcoind.js` (mirrors door 1; full detail in §3). Frame-size guard at
-  `error/bitcoind.js:662`, parse try/catch at `error/bitcoind.js:674`.
+- **Door 2 — rawtx path** (`bitcore-node-zero/lib/services/bitcoind.js`,
+  `_zmqTransactionHandler`). The originally-unguarded door — it parses every rawtx
+  ZMQ frame via `tx.fromString(message)` with no size check and no try/catch, so the
+  same `RangeError` kills the process independently of the inv fix. Mirrors door 1
+  (full detail in §3): frame-size guard at `bitcoind.js:662`, parse try/catch at
+  `bitcoind.js:674`.
 
-- **Door 3 — diagnostic context** (`bitcore-lib-zero/lib/transaction/transaction.js`).
-  Staged in `error/transaction.js`: re-throws the bare `RangeError` with context
-  (buffer length + parsed version) so the cause is identifiable in logs. Not
-  required to stop the crash (the two handler try/catches do that), but it makes
-  both doors' logs diagnosable.
+- **Door 3 — diagnostic context** (`bitcore-lib-zero/lib/transaction/transaction.js`):
+  re-throws the bare `RangeError` with context (buffer length + parsed version) so
+  the cause is identifiable in logs. Not required to stop the crash (the two handler
+  try/catches do that), but it makes both doors' logs diagnosable.
 
 **Design note — `warn`, not `error`.** A malformed ZMQ frame is *expected*
 untrusted input and the process recovers fully by dropping it — that is the
@@ -162,19 +144,19 @@ abort + core dump. One Express `response.send()` built a ~163 MB string
 unpaginated API response — most likely `addr/:addr` returning the full `txList`
 when `from`/`to` are omitted, or an unbounded `utxo`/`multiutxo` array.
 
-**Fix shape — bound the response before serializing.** Staged in
-`error/addresses.js`:
+**Fix shape — bound the response before serializing.** In
+`insight-api-zero/lib/addresses.js`:
 
-- A `sendChecked(self, res, data)` helper (`error/addresses.js:28`) that
+- A `sendChecked(self, res, data)` helper (`addresses.js:28`) that
   `JSON.stringify`s the body *inside try/catch* (a serialization throw becomes a
   handled error, not a crash), enforces `MAX_RESPONSE_BYTES = 50 MB`
-  (`error/addresses.js:22`) → `413 jsonp` when exceeded (`error/addresses.js:38-39`),
+  (`addresses.js:22`) → `413 jsonp` when exceeded (`addresses.js:38-39`),
   then sends. A clean `413` instead of allocating hundreds of MB and aborting.
   Applied to `show`, `utxo`, `multiutxo`, `multitxs`
-  (`error/addresses.js:68,191,209,262`).
+  (`addresses.js:68,191,209,262`).
 
   ```js
-  // error/addresses.js — sendChecked (shape)
+  // addresses.js — sendChecked (shape)
   var body;
   try { body = JSON.stringify(data); }
   catch (e) { return res.status(500).jsonp({ error: 'serialization failed' }); }
@@ -185,14 +167,14 @@ when `from`/`to` are omitted, or an unbounded `utxo`/`multiutxo` array.
   ```
 
 - The address summary's txid list is capped at `MAX_TXIDS = 100000`
-  (`error/addresses.js:23,111-114`) with `txAppearancesTruncated` /
-  `txAppearancesLimit` flags (`error/addresses.js:130-132`) so callers know to page;
+  (`addresses.js:23,111-114`) with `txAppearancesTruncated` /
+  `txAppearancesLimit` flags (`addresses.js:130-132`) so callers know to page;
   utxo arrays are rejected with a `413` past `MAX_UTXOS = 100000`
-  (`error/addresses.js:24,186-190,204-208`).
+  (`addresses.js:24,186-190,204-208`).
 
-**Cap values — deployed (post-bump).** The count caps were raised from the
-original `10000`/`50000` to `100000`/`100000` after live measurement (the bump now
-serves the common-large "whale" class — see sizing, below). `MAX_RESPONSE_BYTES`
+**Cap values.** The count caps sit at `100000`/`100000`, raised from an earlier
+`10000`/`50000` after live measurement (the higher cap serves the common-large
+"whale" class whole — see sizing, below). `MAX_RESPONSE_BYTES`
 (50 MB) is the real OOM guard and is unchanged; the count caps are a cheap early-out
 so we never even build arrays we already know are too big.
 
@@ -202,38 +184,42 @@ so we never even build arrays we already know are too big.
 | `MAX_TXIDS` | 100,000 | Truncate the summary txid list; set `txAppearancesTruncated` + `txAppearancesLimit`. |
 | `MAX_UTXOS` | 100,000 | `413` if a `/utxo` array exceeds this count. |
 
-**Sizing — what the real worst case looks like.** The busiest addresses are the **founders / dev-fee reward
-addresses** (`vFoundersRewardAddress` in `chainparams.cpp`, local copy
-`$ZERO/src/chainparams.cpp`, the local Zero daemon repo root); they take a slice of nearly
-every block subsidy. Measured against the deployed caps (chain tip block 2,479,518):
+**Sizing — what the real worst case looks like.** A small set of **high-volume
+addresses** appear in a slice of nearly every block's coinbase, so their
+tx-appearance and UTXO counts dwarf any ordinary address and define the worst-case
+load for `/utxo`. Measured against the deployed caps:
 
-| Founders # | Address | txApperances | UTXOs | `/utxo` result |
-|---|---|---:|---:|---|
-| 1 | `t3hmg6WApjqVFw9oPWTDy4JLEqXcUWthg5v` | 388,931 | 0 | 200 (drained) |
-| 2 | `t3hrh5M7eaGA5zXCitPXz2pbe146GkVPWHs` | 800,641 | 512,585 | **413** (~10.7 s, ~135 MB if served whole) |
-| 3 | `t3aWmHqBGS7watoKQLa7uykeTaYHoYqM361` | 800,005 | 800,003 | **413** (~17.8 s, ~210 MB → **would OOM** if served whole) |
-| 4 | `t3hsi89hPsZzmnbs3pny6cfAxMxV5TJLErj` | 79,510 | 79,513 | 200 (~20.7 MB, 1.73 s) — calibration whale |
+| Class | txAppearances | UTXOs | `/utxo` result |
+|---|---:|---:|---|
+| drained high-volume addr | ~389k | 0 | 200 (empty set) |
+| ~512k-UTXO mega-address | ~800k | ~512k | **413** (~135 MB if served whole) |
+| ~800k-UTXO mega-address | ~800k | ~800k | **413** (~210 MB → **would OOM** if served whole) |
+| ~80k-UTXO addr (calibration) | ~80k | ~80k | 200 (~20.7 MB) — served whole |
+
+(Specific addresses are intentionally omitted; the figures above are generalized to
+the size classes that matter for the caps.)
 
 **How the 100k cap maps to bytes.** A single serialized `/utxo` element
 (`transformUtxo`: address, txid, vout, scriptPubKey hex, amount, satoshis, height,
 confirmations) is **≈ 260–280 B** — the empirical unit rate. Two anchors hold this:
 
-- *Measured:* whale #4 (79,513 UTXOs) returned a full **~20.7 MB** body (200, 1.73 s).
-  That back-solves to 20.7 MB ÷ 79,513 ≈ **273 B/UTXO**, squarely in the 260–280 B band.
+- *Measured:* the ~80k-UTXO calibration address returned a full **~20.7 MB** body
+  (200). That back-solves to 20.7 MB ÷ ~80k ≈ **273 B/UTXO**, squarely in the
+  260–280 B band.
 - *Calculated:* at the `MAX_UTXOS = 100,000` cap, 100k × 260–280 B ≈ **26–38 MB** — the
   full range, still under the 50 MB ceiling with margin. (The `addresses.js` source
-  comment currently rounds the #4 body to "~30 MB" and cites only the 38 MB top of the
-  range; the measured figure is 20.7 MB — a comment fix is tracked in §5.)
+  comment currently rounds the calibration body to "~30 MB" and cites only the 38 MB
+  top of the range; the measured figure is 20.7 MB — a comment fix is tracked in §5.)
 
 So 100k is the largest count cap that *cannot* breach the byte ceiling even at the
 280 B upper bound, while still serving the common-large whale class whole. By
-contrast #3 served whole (~210 MB ≈ 800,003 × 263 B) is exactly the
-crash-#3 abort. **Decision: keep caps at 100k.** Do NOT raise them to serve #2/#3 in
-full — that re-introduces the OOM we just closed. Note the cap currently rejects
-only *after* the node returns the full UTXO set, so the 413 path is slow on the
-mega-addresses (the upstream fetch cost remains); a pre-count / pagination is the
-durable fix (tracked in §5). The four founders addresses
-are **known mega-addresses** — a `/utxo` 413 on them is expected, not a regression.
+contrast an ~800k-UTXO address served whole (~210 MB ≈ 800k × 263 B) is exactly the
+crash-#3 abort. **Decision: keep caps at 100k.** Do NOT raise them to serve the
+mega-addresses in full — that re-introduces the OOM we just closed. Note the cap
+currently rejects only *after* the node returns the full UTXO set, so the 413 path is
+slow on the mega-addresses (the upstream fetch cost remains); a pre-count /
+pagination is the durable fix (tracked in §5). These high-volume addresses are
+**known mega-addresses** — a `/utxo` 413 on them is expected, not a regression.
 
 **Design note.** Pagination machinery already exists (`transactions.js` paginates
 via `pageNum` → `from`/`to`); the fix applies the same discipline to the address
@@ -248,19 +234,19 @@ repeating ~every 10 min. **Non-fatal** — the explorer keeps serving; only
 8.17's *bundled* CA roots are too stale to validate them (AddTrust External CA Root
 expired 2020-05-30), so TLS is rejected locally.
 
-**Fix shape — trust the OS CA bundle, degrade gracefully.** Staged in
-`error/currency.js`:
+**Fix shape — trust the OS CA bundle, degrade gracefully.** In
+`insight-api-zero/lib/currency.js`:
 
 - **CA trust (the actual handshake fix):** load the OS CA bundle once at module
   load from `CA_CANDIDATES` (`/etc/ssl/certs/ca-certificates.crt`,
-  `/etc/pki/tls/certs/ca-bundle.crt`) into `SYSTEM_CA` (`error/currency.js:32`),
+  `/etc/pki/tls/certs/ca-bundle.crt`) into `SYSTEM_CA` (`currency.js:32`),
   and pass it as `ca` on each request via `requestOpts(url)`
-  (`error/currency.js:45-46`). Falls back to Node's default trust if absent.
+  (`currency.js:45-46`). Falls back to Node's default trust if absent.
   `rejectUnauthorized` is **left on** — this fixes verification, it does not
   disable it.
 
   ```js
-  // error/currency.js — module load
+  // currency.js — module load
   var SYSTEM_CA = (function() {
     for (var i = 0; i < CA_CANDIDATES.length; i++) {
       try { return fs.readFileSync(CA_CANDIDATES[i]); } catch (e) {}
@@ -293,18 +279,17 @@ the two are independent — see [InsightPort.md](InsightPort.md) §2.
 
 ---
 
-## 3. `bitcoind.js` hardening — consolidated (the rest, merged into one file)
+## 3. `bitcoind.js` hardening — consolidated (three signatures, one file)
 
-`error/bitcoind.js` is pulled fresh from the deployed
-`bitcore-node-zero/lib/services/bitcoind.js`, `node --check`-clean, with a `diff -u`
-showing **exactly these five changes and nothing else**. It closes the crash-#1
-rawtx door (§2.1 door 2), the crash-#2 EMFILE fd-leak, and replaces the flat retry
-loop with capped exponential backoff — three signatures at the orchestrator layer
-in one file.
+`bitcore-node-zero/lib/services/bitcoind.js` carries five changes that together
+close the crash-#1 rawtx door (§2.1 door 2), the crash-#2 EMFILE fd-leak, and
+replace the flat retry loop with capped exponential backoff — three signatures at
+the orchestrator layer in one file. (Line numbers below use the short basename
+`bitcoind.js`.)
 
 ### The five changes
 
-**1. New constants** (`error/bitcoind.js:80` and neighbours, with the other
+**1. New constants** (`bitcoind.js:80` and neighbours, with the other
 `Bitcoin.DEFAULT_*`):
 
 ```js
@@ -316,7 +301,7 @@ Bitcoin.MAX_TX_BYTES = 2 * 1024 * 1024;        // ...or larger than 2 MB, before
 ```
 
 **2. `_zmqTransactionHandler` — size guard + try/catch** (the crash-#1 rawtx door),
-`error/bitcoind.js:644-676`. Replaces the bare
+`bitcoind.js:644-676`. Replaces the bare
 `var tx = bitcore.Transaction(); tx.fromString(message);`:
 
 ```js
@@ -335,7 +320,7 @@ try {
 }
 ```
 
-**3. Two helpers — doubling backoff + unified retry**, `error/bitcoind.js:753-783`:
+**3. Two helpers — doubling backoff + unified retry**, `bitcoind.js:753-783`:
 
 ```js
 Bitcoin.prototype._retryInterval = function(retryCount) {
@@ -360,7 +345,7 @@ Bitcoin.prototype._retryLoadTip = function(node, callback) {
 ```
 
 **4. `_initZmqSubSocket` — fd-leak guard** (the EMFILE root cause),
-`error/bitcoind.js:786`+, before `node.zmqSubSocket = zmq.socket('sub')`:
+`bitcoind.js:786`+, before `node.zmqSubSocket = zmq.socket('sub')`:
 
 ```js
 if (node.zmqSubSocket) {
@@ -370,7 +355,7 @@ if (node.zmqSubSocket) {
 ```
 
 **5. `_spawnChildProcess` and `_connectProcess` both call `_retryLoadTip`**
-(`error/bitcoind.js:970`, `error/bitcoind.js:1009`). The two inline
+(`bitcoind.js:970`, `bitcoind.js:1009`). The two inline
 `async.retry({times, interval: self.startRetryInterval}, ...)` blocks are removed;
 the RPC client is hoisted out, each site calls
 `self._retryLoadTip(node, function(err, stopped) { ... })`. `_connectProcess` keeps
@@ -405,25 +390,23 @@ the RPC client is hoisted out, each site calls
 
 ---
 
-## 4. Crash #2 root cause — removed by the connect-mode cutover (live)
+## 4. Crash #2 root cause — removed by running in connect mode
 
-Crash #2's *mechanism* was spawn-mode: bitcore owning zerod's lifecycle. A stale
-datadir lock ("Cannot obtain a lock... probably already running") made each `zerod`
+Crash #2's *mechanism* is spawn-mode: bitcore owning zerod's lifecycle. A stale
+datadir lock ("Cannot obtain a lock... probably already running") makes each `zerod`
 spawn fail; the fixed-interval respawn loop (outside `async.retry`, so
-`startRetryCount: 60` never bounded it) plus the `_initZmqSubSocket` fd-leak turned
-one failure into fd exhaustion. The observed orphan state (2026-06-21): zerod
-running detached (PPID 1) while bitcore was down — a bitcore restart then tried to
-launch a *second* zerod against `/home/ubuntu/.zero`, collided on the lock, and
-spiralled into EMFILE.
+`startRetryCount: 60` never bounded it) plus the `_initZmqSubSocket` fd-leak turn
+one failure into fd exhaustion. The failure mode: zerod left running detached
+(PPID 1) while bitcore is down — a bitcore restart then tries to launch a *second*
+zerod against the datadir, collides on the lock, and spirals into EMFILE.
 
-**This root cause is gone.** The cutover to `connect` mode under systemd is **live**
-(executed 2026-06-22): systemd runs zerod, bitcore only connects to its RPC + ZMQ,
-so there is no respawn loop, no spawn-time fd-leak path, and no stale-lock collision.
-A bitcore restart now re-attaches to the still-running zerod instead of spawning a
-rival. zerod surviving a bitcore crash is now *correct* — it is the stable thing
-bitcore reconnects to.
+**In connect mode this root cause is gone:** systemd runs zerod, bitcore only
+connects to its RPC + ZMQ, so there is no respawn loop, no spawn-time fd-leak path,
+and no stale-lock collision. A bitcore restart re-attaches to the still-running
+zerod instead of spawning a rival. zerod surviving a bitcore crash is *correct* — it
+is the stable thing bitcore reconnects to.
 
-The `error/bitcoind.js` fd-leak + backoff fixes (§3) are belt-and-suspenders for
+The `bitcore-node-zero/lib/services/bitcoind.js` fd-leak + backoff fixes (§3) are belt-and-suspenders for
 this signature: the architectural change removes the trigger; the code change makes
 the path safe even if it is ever exercised again.
 
@@ -433,15 +416,15 @@ crash-recovery runbook are in [InsightBlock.md §5](InsightBlock.md#5-recovery),
 
 ---
 
-## 4a. UI banner — "zcashd" → "zerod" (deployed 2026-06-23)
+## 4a. UI banner — "zcashd" → "zerod"
 
 The red offline banner inherited from str4d's Zcash Insight fork read *"Can't
-connect to zcashd…"*. This explorer fronts **zerod**, so it was wrong; corrected to
+connect to zcashd…"*. This explorer fronts **zerod**, so it is wrong; corrected to
 *"Can't connect to zerod to get live updates"*.
 
 The banner used angular-gettext's `translate` directive (English source text = catalog
-lookup key) but we have no zerod translations. So we just **deleted the directive**
-and edited the text — the `<p>` now renders its literal English in every locale. This
+lookup key), but there are no zerod translations. The fix **removes the directive**
+and edits the text — the `<p>` renders its literal English in every locale. This
 touches only `connection.html`; the catalog (`translations.js` / `main.min.js`) is
 not in play and needs no edit or rebuild.
 
@@ -449,9 +432,9 @@ not in play and needs no edit or rebuild.
 |---|---|---|
 | `views/includes/connection.html` | `!apiOnline` `<p>`: text → "Can't connect to zerod to get live updates", `translate` removed | 711 → 626 |
 
-**Deploy.** Static template — no service restart. Served under the `/insight/` prefix
+**Serving.** Static template — no service restart. Served under the `/insight/` prefix
 (`/insight/views/includes/connection.html`); fetched live, so a browser Shift-reload
-picks it up. Deployed original backed up with a `.20260623-*` suffix for rollback.
+picks it up.
 
 ### Message / translation tests (how to verify)
 
@@ -484,14 +467,14 @@ healthy, so verification is done by **forcing the banner** without disturbing ze
    curl -sL https://insight.zeromachine.io/insight/views/includes/connection.html | md5sum
    ```
 
-   Expected (verified at deploy): connection.html `58094a9afafd6d9dfed2d3c71493caf8`
-   (matches `error/insight-ui-zero/public/views/includes/connection.html`). Also
-   confirm the served template carries no `translate` attribute on the `!apiOnline`
-   `<p>` and no "zcashd".
+   Expected: connection.html `58094a9afafd6d9dfed2d3c71493caf8` (matches
+   `insight-ui-zero/public/views/includes/connection.html`). Also confirm the
+   served template carries no `translate` attribute on the `!apiOnline` `<p>` and no
+   "zcashd".
 
 ---
 
-## 5. The rest to merge (not yet staged)
+## 5. The rest to merge (not yet done)
 
 | Item | Why deferred | Track as |
 |---|---|---|
@@ -516,43 +499,36 @@ parser. Three layers:
 
 ## 6. Deploy / rollback (pointer)
 
-**Deployed 2026-06-23.** The five-file backend batch went in together — the three
-crash-#1 layers (`index.js` shuts the inv door, `bitcoind.js` shuts the rawtx door,
-`transaction.js` makes both logs diagnosable) plus `addresses.js` (#3) and
-`currency.js` (#4); the UI banner fix (§4a) followed in the same window.
-
-The graceful-shutdown rules (**never `kill -9`
-zerod** — always `zero-cli ... stop`, since SIGKILL forces a multi-hour dirty-shutdown
-reindex; **never `rm` a lock** — fd-locks are kernel-owned) and the rollback path
-(restore the `.20260623-*` backups) live in [InsightBlock.md §5](InsightBlock.md#5-recovery).
-Standing constraint: nothing reaches the host without the user's explicit go-ahead.
+The graceful-shutdown rules (**never `kill -9` zerod** — always `zero-cli ... stop`,
+since SIGKILL forces a multi-hour dirty-shutdown reindex; **never `rm` a lock** —
+fd-locks are kernel-owned), the backup convention, and the rollback path live in
+[InsightBlock.md §5](InsightBlock.md#5-recovery).
 
 ---
 
 ## 7. Monitoring — verifying the fixes hold
 
-Each fix has a cheap post-deploy check. Run these from the host (`ssh HOST`); the
-service runs as `bitcore.service` under systemd in **connect** mode.
+Each fix has a cheap health check. Run these from the host; the service runs as
+`bitcore.service` under systemd in **connect** mode. (Set the journal window to your
+deploy date or a recent span, e.g. `--since '-7d'`.)
 
 **Service health (covers #1, #2, #3 — any of them kills or restarts the process).**
 
 ```sh
 systemctl status bitcore.service --no-pager        # active, NRestarts low/stable
 systemctl show bitcore.service -p NRestarts         # 0 since deploy = no crash-loop
-journalctl -u bitcore.service --since '2026-06-23' \
+journalctl -u bitcore.service --since '<deploy-date>' \
   | grep -Ei 'heap|OOM|RangeError|EMFILE|FATAL'     # expect: nothing
 ```
 
-A clean `NRestarts=0` since the deploy timestamp is the headline signal: it means
-none of crashes #1/#2/#3 have fired. Validation during the deploy: the service
-survived all four founders mega-addresses with `NRestarts=0` and no
-`heap`/`OOM`/`RangeError` in the journal.
+A clean `NRestarts=0` since the deploy is the headline signal: it means none of
+crashes #1/#2/#3 have fired.
 
 **Crash #1 (bad-frame doors).** The fix logs-and-drops instead of crashing. A bad
-frame now appears as a `warn`, not a process death:
+frame appears as a `warn`, not a process death:
 
 ```sh
-journalctl -u bitcore.service --since '2026-06-23' \
+journalctl -u bitcore.service --since '<deploy-date>' \
   | grep -E 'rejecting (inv|rawtx)|failed to parse'
 ```
 
@@ -562,20 +538,20 @@ attribution (ZMQ strips the peer IP before bitcore sees the frame; the in-proces
 rate counter in §5 is the planned escalation). Ban from zerod, not bitcore:
 `zero-cli setban <ip> add`.
 
-**Crash #3 (oversized response).** Confirm the caps fire on the founders
-mega-addresses with a clean `413`, not an abort (replace the prefix as needed):
+**Crash #3 (oversized response).** Confirm the caps fire on a high-volume
+mega-address with a clean `413`, not an abort (substitute a known mega-address):
 
 ```sh
 curl -s -o /dev/null -w '%{http_code} %{time_total}s\n' \
-  https://insight.zerocurrency.io/insight-api-zero/addr/t3aWmHqBGS7watoKQLa7uykeTaYHoYqM361/utxo
-# expect 413 (founders #3, 800k UTXOs); whale #4 (t3hsi89h...) returns 200 ~20.7 MB
+  https://insight.zerocurrency.io/insight-api-zero/addr/<MEGA_ADDR>/utxo
+# expect 413 on an ~800k-UTXO mega-address; the ~80k-UTXO address returns 200 ~20.7 MB
 ```
 
 **Crash #4 (price feed).** Non-fatal; the explorer keeps serving last-known rates.
 Health = the feed is refreshing, not erroring every ~10 min:
 
 ```sh
-journalctl -u bitcore.service --since '2026-06-23' | grep -Ei 'certificate|currency'
+journalctl -u bitcore.service --since '<deploy-date>' | grep -Ei 'certificate|currency'
 # expect: no 'certificate has expired'
 ```
 
@@ -586,22 +562,19 @@ force the banner, footer language switch for fall-through, and the served-bytes 
 check at the `/insight/` prefix.
 
 **`node --check` runtime caveat.** Any `node --check` of a staged file must run
-under the **service's** v8.17.0, not a bare `node` (which historically resolved to
-v8.10.0 on this host). Use the explicit path
-`/home/ubuntu/.nvm/versions/node/v8.17.0/bin/node`.
+under the **service's** v8.17.0, not a bare `node` (which may resolve to a different
+version depending on shell/PATH). Use the explicit nvm path to the v8.17.0 binary.
 
 ---
 
-## To review — residual `zcashd` strings in `error/bitcoind.js`
+## 8. Known issue — residual `zcashd` strings in `bitcoind.js`
 
-The staged orchestrator `error/bitcoind.js` mirrors what is **deployed**, so it is
-left byte-for-byte (do not retarget the `.js`/`.html` artifacts in `error/` as part
-of the docs pass). But it still carries inherited Zcash-era `zcashd` strings from
-the str4d lineage. These are flagged here for a future *code* review, not a doc edit:
+`bitcore-node-zero/lib/services/bitcoind.js` still carries inherited `zcashd`
+strings from the str4d Zcash lineage. One is a latent bug; the rest are cosmetic:
 
 | Line | Text | Kind | Risk |
 |---|---|---|---|
-| **876** | `var pidPath = spawnOptions.datadir + '/zcashd.pid'` | **filesystem path** | **URGENT** |
+| **876** | `var pidPath = spawnOptions.datadir + '/zcashd.pid'` | **filesystem path** | **latent bug** |
 | 345-347 | `'...in zcashd config options'` (×3 checkArgument) | error string | cosmetic |
 | 431 | `'...zcashd is undergoing a reindex.'` | log warn | cosmetic |
 | 976 | `'Stopping while trying to spawn zcashd.'` | error string | cosmetic |
@@ -609,50 +582,23 @@ the str4d lineage. These are flagged here for a future *code* review, not a doc 
 | 2253 | `'zcashd spawned process exited with status code: '` | error string | cosmetic |
 | 2265 | `'zcashd process did not exit'` | error string | cosmetic |
 
-**Line 876 is urgent and not cosmetic — confirmed wrong.** It is the actual
-pidfile path the orchestrator watches in the data directory:
+**Line 876 is a latent bug, not cosmetic.** It is the pidfile path the orchestrator
+watches in the data directory:
 
 ```js
 var pidPath = spawnOptions.datadir + '/zcashd.pid';
 ```
 
-On HOST the data directory is `~/.zero` and the daemon writes **`zerod.pid`** —
-there is **no `~/.zcash` and no `zcashd.pid`** anywhere. So this lookup targets a
-file that does not exist. The pidfile-based liveness / clean-shutdown check keyed
-on `pidPath` therefore never matches; the code falls through to whatever fallback
-path it has (the spawned-process handle), masking the bug — which is why it has not
-surfaced as a crash. The fix is a one-line retarget:
+The Zero daemon writes **`zerod.pid`**, so this lookup targets a file that does not
+exist. The pidfile-based liveness / clean-shutdown check keyed on `pidPath` never
+matches; the code falls through to the spawned-process handle, masking the bug —
+which is why it has not surfaced as a crash. The fix is a one-line retarget:
 
 ```js
 var pidPath = spawnOptions.datadir + '/zerod.pid';
 ```
 
-It is still a **behavioral** change to a deployed artifact, not a doc edit, so it
-belongs to a code review + redeploy of `bitcoind.js` (do not edit the `error/`
-copy as part of the docs pass). When made, re-verify the orchestrator correctly
-reads `zerod.pid` from `~/.zero` after restart.
-
-The remaining lines (345-347, 431, 976, 1015, 2253, 2265) are user-facing message
-text only; safe to retarget `zcashd`→`zerod` in the same revision.
-
-## To review — code comments on the crash fixes
-
-The crash-fix commits carry explanatory comments in the source (the `Crash #3
-hardening` / `Crash #4 fix` blocks and the ZMQ size/parse-guard notes). Review them
-for accuracy and tone before any public push:
-
-- **Numbering consistency.** `addresses.js` says `Crash #3`, `currency.js` says
-  `Crash #4`; the ZMQ inv-tx / rawtx parse guards (`index.js`, `bitcoind.js`,
-  `transaction.js`) carry no number. Confirm the #N scheme matches section 1's
-  crash summary, or drop the numbers if they don't map cleanly.
-- **Calibration figures.** The `addresses.js` comment cites specific live numbers
-  (≈79.5k txAppearances/UTXOs, ≈30 MB body, 50 MB ceiling). Confirm those are
-  still representative, or soften to ranges so they don't read as stale once the
-  busiest address grows.
-- **Host-specific detail.** Comments reference systemd `Restart=on-failure`,
-  Node 8.17's bundled CA roots, and OS CA paths. Keep only what's true of the
-  deployed host; trim anything that won't generalize for public readers.
-
-Affected files: `lib/transaction/transaction.js` (lib), `lib/services/bitcoind.js`
-(node), `lib/addresses.js` / `lib/currency.js` / `lib/index.js` (api). Comment
-review only — no behavioral change.
+It is a **behavioral** change, so it needs a code review + redeploy of `bitcoind.js`;
+after the change, verify the orchestrator reads `zerod.pid` from the datadir on
+restart. The remaining lines (345-347, 431, 976, 1015, 2253, 2265) are user-facing
+message text only; safe to retarget `zcashd`→`zerod` in the same revision.

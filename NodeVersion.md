@@ -1,73 +1,71 @@
-# Node version on HOST
+# Node version — replicating the pinned runtime
 
-Context: the Zero Insight explorer (`bitcore`) runs on Node v8.17.0; see `~/zero/insight/InsightBlock.md` / `InsightPort.md`.
+The Zero Insight explorer (`bitcore`) runs on **Node v8.17.0**. This is the admin
+runbook for *reproducing* that pinned environment on a host. The version is not
+incidental: the native modules and dependency pins (e.g. `bn.js`) are built against
+this runtime, and the daemon's TLS behavior depends on the OpenSSL it bundles. Do
+not substitute a different Node without going through the upgrade evaluation.
 
-## The runtime that matters
+> This runbook covers only how to *reproduce* the pinned runtime. The constraints
+> behind the pin — why Node 8 is held, OpenSSL/native-module considerations, and any
+> future upgrade evaluation — are out of scope here.
 
-`bitcore.service` pins the node binary by full path in `ExecStart`:
+## 1. The runtime that matters: the service is PATH-independent
 
-    /home/ubuntu/.nvm/versions/node/v8.17.0/bin/node ./node_modules/bitcore-node-zero/bin/bitcore-node start
+`bitcore.service` pins the node binary by **full path** in `ExecStart`, so the
+service always runs v8.17.0 regardless of what a shell's bare `node` resolves to:
 
-So the **service is unaffected by PATH** — it always runs v8.17.0 regardless of what
-a shell's bare `node` resolves to. This note is only about the interactive/CLI side.
+    <NVM_DIR>/versions/node/v8.17.0/bin/node ./node_modules/bitcore-node-zero/bin/bitcore-node start
 
-## The discrepancy that existed (before 2026-06-23)
+This is the single most important fact: the *service* is unaffected by PATH or by
+nvm's interactive setup. Everything below is about making the **interactive / CLI**
+side match the service, so that `node --check` and ad-hoc tooling run under the same
+runtime the service uses.
 
-- `nvm` default alias: `v8.17.0` (the only nvm-installed version).
-- apt-installed system node: **`/usr/bin/node` = v8.10.0** (package `nodejs`, Oct 2018).
-- `~/.bashrc` sourced nvm — but **below** its interactive guard on line 2:
+## 2. Install nvm + Node v8.17.0
 
-      [ -z "$PS1" ] && return
+    # install nvm (see nvm's repo for the current bootstrap line), then:
+    nvm install 8.17.0
+    nvm alias default 8.17.0
 
-  Non-interactive `ssh HOST 'cmd'` and `bash -l` shells return before reaching the
-  nvm lines, so nvm never activated and bare `node` fell through to `/usr/bin/node`
-  (v8.10.0). Result: interactive shells got v8.17.0; everything else got v8.10.0.
+This yields `<NVM_DIR>/versions/node/v8.17.0/bin/{node,npm}`; `npm` pairs as 6.13.4.
 
-This was a footgun for `node --check` during a fix deploy: running it via a plain
-`ssh HOST 'node --check ...'` checked under v8.10.0, not the service's v8.17.0.
+## 3. Make every shell form resolve to the pinned node
 
-## The fix applied
+nvm is normally sourced from `~/.bashrc`, which often returns early for
+non-interactive shells (a guard like `[ -z "$PS1" ] && return` near the top). If nvm
+is sourced *below* that guard, non-interactive shells (`ssh host 'cmd'`, scripts)
+never activate nvm and `node` falls through to whatever else is on PATH — a
+different, wrong version. Load nvm **above** the interactive guard so all shell
+forms activate it:
 
-1. `~/.bashrc` — nvm early-load block inserted **above** the interactive guard:
+    # in ~/.bashrc, ABOVE the interactive guard:
+    export NVM_DIR="$HOME/.nvm"
+    [ -s "$NVM_DIR/nvm.sh" ] && \. "$NVM_DIR/nvm.sh" --no-use
+    nvm use default >/dev/null 2>&1
 
-       export NVM_DIR="$HOME/.nvm"
-       [ -s "$NVM_DIR/nvm.sh" ] && \. "$NVM_DIR/nvm.sh" --no-use
-       nvm use default >/dev/null 2>&1
+    # in ~/.profile, for login shells (belt-and-suspenders):
+    export NVM_DIR="$HOME/.nvm"
+    [ -s "$NVM_DIR/nvm.sh" ] && \. "$NVM_DIR/nvm.sh"
 
-   So non-interactive ssh and login shells also activate nvm default.
+Any apt-installed `/usr/bin/node` can be left in place — other system tooling may
+use it; nvm's bin simply precedes it on PATH.
 
-2. `~/.profile` — appended a standard nvm load for login shells (belt-and-suspenders):
+## 4. Verify all three shell forms
 
-       export NVM_DIR="$HOME/.nvm"
-       [ -s "$NVM_DIR/nvm.sh" ] && \. "$NVM_DIR/nvm.sh"
+All of these must resolve `node` to the v8.17.0 binary:
 
-3. `/usr/bin/node` (v8.10.0, apt `nodejs`) **left in place** — other system tooling
-   may use it; nvm's bin now simply precedes it on PATH.
+    node --version              # v8.17.0  (non-interactive)
+    bash -lc "node --version"   # v8.17.0  (login)
+    bash -ic "node --version"   # v8.17.0  (interactive)
 
-Backups taken at change time:
+`npm --version` should report 6.13.4.
 
-    ~/.bashrc.bak.20260623-014955
-    ~/.profile.bak.20260623-014955
-
-## Verified after
-
-All three shell forms resolve `node` → `/home/ubuntu/.nvm/versions/node/v8.17.0/bin/node`:
-
-    ssh HOST 'node --version'              # v8.17.0  (non-interactive)
-    ssh HOST 'bash -lc "node --version"'   # v8.17.0  (login)
-    ssh HOST 'bash -ic "node --version"'   # v8.17.0  (interactive)
-
-`npm` resolves to the matching `v8.17.0/bin/npm` (6.13.4).
-
-## Rollback (these dotfile edits only)
-
-    cp ~/.bashrc.bak.20260623-014955 ~/.bashrc
-    cp ~/.profile.bak.20260623-014955 ~/.profile
-
-## Rule of thumb
+## 5. Rule of thumb — match the service runtime explicitly
 
 For anything that must match the live runtime (e.g. `node --check` of a staged fix
-before deploy), prefer the **explicit service path** and don't rely on bare `node`:
+before deploy), prefer the **explicit service path** over a bare `node`, so a
+mis-resolving shell can never check under the wrong version:
 
-    NODE=/home/ubuntu/.nvm/versions/node/v8.17.0/bin/node
+    NODE=<NVM_DIR>/versions/node/v8.17.0/bin/node
     $NODE --check <file>
