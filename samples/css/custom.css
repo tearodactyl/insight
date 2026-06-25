@@ -29,7 +29,11 @@
  * so this still renders on the app's older runtime if vars are unsupported.
  */
 :root {
-  --zero-bg: #eef4f9;
+  /* DIAGNOSTIC: pronounced blue-with-magenta (periwinkle/blue-violet) so the
+   * override is unmistakable on screen. The prior #eef4f9 was near-white and
+   * could not be distinguished from the base light theme by eye. Dial back to a
+   * tasteful value once visibility is confirmed. */
+  --zero-bg: #cdd6f4;
   --zero-panel: #ffffff;
   --zero-gold: #d9b227;
   --zero-gold-d: #b89420;
@@ -45,8 +49,11 @@
 
 /* ---- base surface + type ------------------------------------------------ */
 body {
-  background: #eef4f9;
-  background: var(--zero-bg);
+  /* !important + literal value first: forces the override even if main.min.css
+   * sets body background at higher specificity (suspected cause of the prior
+   * "no visible change"). DIAGNOSTIC value — pronounced blue/magenta. */
+  background: #cdd6f4 !important;
+  background: var(--zero-bg) !important;
   color: #1f2933;
   color: var(--zero-text);
   /* Ubuntu is already loaded in index.html:15 — no new font dependency. */
@@ -62,15 +69,15 @@ a, a:visited { color: #1a5e9c; color: var(--zero-link); }
 a:hover, a:focus { color: #0f3f6e; color: var(--zero-link-h); }
 
 /* ---- navbar / brand ----------------------------------------------------- */
-/* Keep the navbar a clean white bar over the ice-blue page, gold brand. */
-.navbar { background: #ffffff; background: var(--zero-panel); border-color: #dbe4ec; border-color: var(--zero-line); }
-.navbar-brand, .navbar .navbar-brand { color: #d9b227 !important; color: var(--zero-gold) !important; font-weight: 700; letter-spacing: .08em; }
-.navbar-nav > li > a { color: #1f2933; color: var(--zero-text); }
-.navbar-nav > li > a:hover { color: #d9b227; color: var(--zero-gold); }
-/* active nav item: gold underline, matching the wallet's active-tab cue */
-.navbar-nav > li.active > a,
-.navbar-nav > li > a.active {
-  color: #d9b227; color: var(--zero-gold);
+/* Leave the navbar BLACK as designed: main.min.css sets
+ * `.navbar-default{background-color:#000000}` with near-white links (#F4FBE8)
+ * and a white brand — a coherent dark bar. An earlier attempt to force it white
+ * created white-on-white invisible links, so we don't touch the navbar surface
+ * or link colors here. Only the active-item gold underline is layered on as an
+ * additive cue (it adds a border, doesn't fight the existing colors).
+ * See [[custom-css-cascade-important]]. */
+.navbar-default .navbar-nav > li.active > a,
+.navbar-default .navbar-nav > li > a.active {
   border-bottom: 2px solid #d9b227; border-bottom: 2px solid var(--zero-gold);
 }
 
@@ -95,6 +102,27 @@ a:hover, a:focus { color: #0f3f6e; color: var(--zero-link-h); }
   color: #d9b227; color: var(--zero-gold);
   background: rgba(217, 178, 39, .08);
 }
+
+/* ---- unify the two top green boxes -------------------------------------- */
+/* The header has two green boxes that base CSS gives DIFFERENT shades, which
+ * made the white search text hard to read:
+ *   - search input  .navbar-form .form-control  background #7CAD23 (bright
+ *                   yellow-green) + white text  -> poor contrast
+ *   - conn/status   .status                      background #597338 (darker
+ *                   olive) + #eee text          -> readable
+ * Unify BOTH to the darker olive (#597338) with white text so they match and
+ * the search text is legible. !important is required: base .navbar-form
+ * .form-control is a two-selector rule that beats a bare #search.
+ * See [[custom-css-cascade-important]]. */
+.navbar-form .form-control,
+#search {
+  background-color: #597338 !important; /* match the conn/status box */
+  color: #fff !important;
+}
+/* placeholder: lighten slightly so it reads on the darker olive */
+#search::-webkit-input-placeholder { color: #cfe3a6 !important; }
+#search::-moz-placeholder { color: #cfe3a6 !important; }
+#search:-ms-input-placeholder { color: #cfe3a6 !important; }
 
 /* ---- search box focus affordance ---------------------------------------- */
 #search:focus, .form-control:focus {
