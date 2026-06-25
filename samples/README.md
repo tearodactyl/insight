@@ -83,6 +83,52 @@ when live, red `⚠ no price feed` when the factor is `0`/absent.
 expired-CA fallback** (`currency.js` sets `usd`/`btc` = 0 when the price fetch
 fails) — observable without log-diving.
 
+The CSS theme — `css/custom.css`
+--------------------------------
+
+A single **additive** override stylesheet, layered AFTER `css/main.min.css` via
+one extra `<link>` in the sampled `index.html`. It re-tints **existing**
+selectors only — touches no LESS source, needs no `grunt` rebuild, and rolls back
+by removing the `<link>`. The base bundle is light, so this is a deliberately
+**light** theme that works WITH the cascade rather than a dark inversion.
+
+What it changes:
+
+- **Page surface** — `body` background set to `#eef1f4`, a faint cool grey-blue
+  ("icy/austere"), against the pure-white (`#ffffff`) panels. This needs
+  `!important`: `main.min.css` has `body{background-color:#fff}` at the same
+  specificity, so without it the override silently no-ops. The color was tuned by
+  eye — the trap is `R=G` with blue maxed (`#cdd6f4`, `#dde9f1`, `#eeeeff`), which
+  reads baby-blue or magenta/lavender; `#eef1f4` keeps `R<G<B` with blue **not**
+  maxed, giving a cold grey-blue with no violet cast.
+- **The two top green boxes unified** — the search input
+  (`.navbar-form .form-control`, base `#7CAD23` bright yellow-green + white text =
+  poor contrast) and the conn/status box (`.status`, `#597338` olive) were
+  different shades. Both are forced to the darker olive `#597338` with white text
+  so the search text is legible. `!important` is required because the base search
+  rule is a two-selector rule that outranks a bare `#search`. Placeholder text is
+  lightened (`#cfe3a6`) to read on the darker green.
+- **Navbar left BLACK as designed** — an earlier attempt to force it white made
+  white-on-white invisible links, so the navbar surface/link colors are NOT
+  touched. Only an additive **gold underline** (`#d9b227`) marks the active nav
+  item, plus a gold focus ring on the search box.
+- **Links** stay deep blue (`#1a5e9c`, darker on hover) — gold is reserved for
+  brand/active-nav only, so link color is decoupled from the gold accent.
+- **Hashes** get tabular monospace on the most-read elements for readability;
+  panels/tables get faint blue-grey hairlines and a faint gold row-hover.
+
+The "About" panel copy in `views/index.html` was also rewritten with clickable
+links: **open-source** → the `insight-ui-zero` repo, **Zero Currency** → the
+`Zero` repo, and **Github Issue tracker** → the issues page. The "About" heading
+is kept.
+
+> Cache note: `custom.css` and the `views/*.html` are static assets served by
+> `express.static` (read from disk per request, no content caching), so a
+> `systemctl restart bitcore.service` has **no** effect on their visibility. Only
+> the Cloudflare edge cache (a 4h TTL CF injects — see `clng.md`) + the browser
+> cache gate them. **Purge Cloudflare after every static deploy** or edits sit
+> invisible behind the edge.
+
 Bundle classes / assets relied on (all confirmed present)
 ---------------------------------------------------------
 
@@ -109,14 +155,20 @@ diff -u insight-ui-zero/public/views/includes/header.html \
         samples/views/includes/header.html
 ```
 
-Promote a sample into the live raw-served tree (back up first):
+Promote a sample into the live raw-served tree (back up first). Back up with a
+**timestamped** suffix `.YYYYMMDD-HHMMSS` (host-local clock), NOT a bare `.bak` —
+unique suffixes never collide, sort chronologically, and record when each backup
+was taken:
 
 ```sh
 LIVE=insight-ui-zero/public/views
-cp "$LIVE/includes/header.html" "$LIVE/includes/header.html.bak"   # rollback copy
+ts=$(date +%Y%m%d-%H%M%S)                                          # one ts per batch
+cp -p "$LIVE/includes/header.html" "$LIVE/includes/header.html.$ts"  # rollback copy
 cp samples/views/includes/header.html "$LIVE/includes/header.html"
 ```
 
-No build step. The change is live on the next page load (hard-refresh to defeat
-the browser template cache). Roll back by restoring the `.bak`. Nothing reaches
-the host until you copy it there explicitly.
+No build step. The change is live on the next page load — but for **static assets
+served behind Cloudflare** (`custom.css`, `views/*.html`), hard-refresh AND purge
+the Cloudflare edge cache (4h injected TTL — see `clng.md`); a bitcore restart
+does nothing for them. Roll back by copying the timestamped backup back over the
+original. Nothing reaches the host until you copy it there explicitly.
