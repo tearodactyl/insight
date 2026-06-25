@@ -29,11 +29,12 @@
  * so this still renders on the app's older runtime if vars are unsupported.
  */
 :root {
-  /* DIAGNOSTIC: pronounced blue-with-magenta (periwinkle/blue-violet) so the
-   * override is unmistakable on screen. The prior #eef4f9 was near-white and
-   * could not be distinguished from the base light theme by eye. Dial back to a
-   * tasteful value once visibility is confirmed. */
-  --zero-bg: #cdd6f4;
+  /* Production icy page surface: faint cool grey-blue, NO violet. The trap is
+   * R=G with blue maxed (#cdd6f4, #dde9f1, #eeeeff) — that imbalance reads
+   * baby-blue or magenta/lavender. Here R<G<B with blue NOT maxed
+   * (ee/f1/f4) keeps the tint a cold grey-blue whisper: icy, austere, no purple
+   * cast, still off-white against the #fff panels. */
+  --zero-bg: #eef1f4;
   --zero-panel: #ffffff;
   --zero-gold: #d9b227;
   --zero-gold-d: #b89420;
@@ -49,10 +50,10 @@
 
 /* ---- base surface + type ------------------------------------------------ */
 body {
-  /* !important + literal value first: forces the override even if main.min.css
-   * sets body background at higher specificity (suspected cause of the prior
-   * "no visible change"). DIAGNOSTIC value — pronounced blue/magenta. */
-  background: #cdd6f4 !important;
+  /* !important + literal value first: forces the override even though
+   * main.min.css sets `body{background-color:#fff}` (the prior "no visible
+   * change" cause). Production icy value — light ice blue, visible on #fff. */
+  background: #eef1f4 !important;
   background: var(--zero-bg) !important;
   color: #1f2933;
   color: var(--zero-text);
