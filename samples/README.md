@@ -98,39 +98,39 @@ selectors only — touches no LESS source, needs no `grunt` rebuild, and rolls b
 by removing the `<link>`. The base bundle is light, so this is a deliberately
 **light** theme that works WITH the cascade rather than a dark inversion.
 
-What it changes:
+Each rule is an override that is **necessary because the base differs** — nothing
+that merely restates what `main.min.css` already does. What it changes:
 
-- **Page surface** — `body` background set to `#eef1f4`, a faint cool grey-blue
-  ("icy/austere"), against the pure-white (`#ffffff`) panels. This needs
-  `!important`: `main.min.css` has `body{background-color:#fff}` at the same
-  specificity, so without it the override silently no-ops. The color was tuned by
-  eye — the trap is `R=G` with blue maxed (`#cdd6f4`, `#dde9f1`, `#eeeeff`), which
-  reads baby-blue or magenta/lavender; `#eef1f4` keeps `R<G<B` with blue **not**
-  maxed, giving a cold grey-blue with no violet cast.
-- **The two top green boxes unified** — the search input
-  (`.navbar-form .form-control`, base `#7CAD23` bright yellow-green + white text =
-  poor contrast) and the conn/status box (`.status`, `#597338` olive) were
-  different shades. Both are forced to the darker olive `#597338` with white text
-  so the search text is legible. `!important` is required because the base search
-  rule is a two-selector rule that outranks a bare `#search`. Placeholder text is
-  lightened (`#cfe3a6`) to read on the darker green.
-- **Navbar left as designed** — an earlier attempt to force the bar
-  white made white-on-white invisible links, so the navbar surface/link colors
-  are NOT touched (white links on the black bar).
-- **Selected nav item kept legible (white/black inversion)** — base
-  `main.min.css` styles the selected (`.active`) item with a colored background +
-  white text, but that wasn't reliably winning (so it rendered dark on the black
-  bar), and its *hover* rule sets only a white background with **no text color**
-  (white-on-white on hover). The override inverts the selected item to **white
-  background + black text in all states (rest/hover/focus)** with `!important` —
-  a clear "pressed" cue that can never go invisible. Unselected items are
-  unaffected.
-- **Links and accents** are a single deep-blue family (`#1a5e9c`, darker
-  `#0f3f6e` on hover) — links, the active-currency dropdown highlight, the
-  search focus ring, and the table row-hover all draw from this one color.
-- **Hashes** are kept in the loaded Ubuntu font on the most-read elements for
-  readability; panels/tables get faint blue-grey hairlines and a faint blue
-  row-hover.
+- **Page surface** — `body` background set to `#eef1f4`, a faint cool grey-blue,
+  against the pure-white (`#ffffff`) panels. Needs `!important`: `main.min.css` has
+  `body{background-color:#fff}` at the same specificity, so without it the override
+  silently no-ops.
+- **Panels/tables lifted to white** — base paints `.well`/`.col-gray` grey
+  (`#f5f5f5`/`#F4F4F4`), which blends into the ice-blue page; they're forced to
+  white (`#ffffff`) so panels read as distinct surfaces. Hairlines tinted
+  blue-grey (`#dbe4ec`).
+- **Navbar = plain buttons, hover-invert** — white text on the black bar at rest,
+  inverting to black-on-white on hover/focus, back on leave; every item identical
+  (no persistent "selected" state). The override sets **both** background and color
+  with `!important` because the base bundle stacks two conflicting half-rules on
+  hover (Bootstrap's `background:transparent` vs the Zero black-theme's
+  `background:#fff` with color unset), so the result is otherwise order-dependent
+  and lands dark/invisible. There is intentionally no `.active` styling — the
+  bundled `ui-route` directive never applies `.active` (its `^link$` regex never
+  matches the `/link` path), so a selected-state rule would style a class that is
+  never in the DOM.
+- **The two top green boxes unified** — base gives the search input
+  (`.navbar-form .form-control`/`#search`) a bright `#7CAD23` yellow-green while
+  the conn/status box (`.status`) is `#597338` olive. The search box is forced to
+  the same `#597338` so both boxes match. `!important` is required because the base
+  search rule outranks a bare `#search`. (Base already sets the search text white
+  and a readable placeholder, so those are left to base.)
+- **Links** are deep blue (`#1a5e9c`, darker `#0f3f6e` on hover).
+- **Selected currency in the dropdown** — base highlights `.dropdown>.active>a`
+  (class on the `<li>`), but the currency markup puts `.active` on the `<a>`, so
+  base's highlight does not apply; the override adds a faint blue wash
+  (`rgba(26,94,156,.08)`) + blue text on `a.active` so the chosen currency is
+  visibly marked.
 
 The "About" panel copy in `views/index.html` was also rewritten with clickable
 links: **open-source** → the `insight-ui-zero` repo, **Zero Currency** → the
