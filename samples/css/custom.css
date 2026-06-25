@@ -1,6 +1,5 @@
-/* samples/css/custom.css — Zero light "ice-blue" override (no-rebuild).
- * Layered after main.min.css; re-tints existing selectors only.
- * Literal fallbacks precede each var() for the app's older runtime. */
+/* samples/css/custom.css — Zero light "ice-blue" override.
+ * Layered after main.min.css; re-tints existing selectors only. */
 :root {
   --zero-bg: #eef1f4;     /* page surface: faint cool grey-blue */
   --zero-panel: #ffffff;
@@ -12,72 +11,31 @@
 }
 
 /* ---- base surface + type ------------------------------------------------ */
-body {
-  background: #eef1f4 !important;  /* !important: beats main.min.css body{background:#fff} */
-  background: var(--zero-bg) !important;
-  color: #1f2933;
-  color: var(--zero-text);
-  font-family: "Ubuntu", -apple-system, "Segoe UI", Roboto, sans-serif;
-}
+/* !important on background beats main.min.css body{background:#fff} (else no visible change) */
+body { background: var(--zero-bg) !important; color: var(--zero-text); font-family: "Ubuntu", sans-serif; }
+h1, h2, h3, h4, .page-header { color: var(--zero-text); }
+.text-muted, .text-right small { color: var(--zero-muted) !important; }
+hr, .page-header { border-color: var(--zero-line); }
 
-h1, h2, h3, h4, .page-header { color: #1f2933; color: var(--zero-text); }
-.text-muted, .text-right small { color: #6b7480 !important; color: var(--zero-muted) !important; }
-hr, .page-header { border-color: #dbe4ec; border-color: var(--zero-line); }
+/* ---- links: deep blue, darker on hover ---------------------------------- */
+a, a:visited { color: var(--zero-link); }
+a:hover, a:focus { color: var(--zero-link-h); }
 
-/* ---- links (deep blue, darker on hover) --------------------------------- */
-a, a:visited { color: #1a5e9c; color: var(--zero-link); }
-a:hover, a:focus { color: #0f3f6e; color: var(--zero-link-h); }
+/* ---- navbar: plain buttons, white-on-black, invert on hover ------------- */
+/* Set BOTH bg and color: base stacks two conflicting half-rules on hover
+ * (Bootstrap's bg:transparent vs the Zero black-theme's bg:#fff, color unset),
+ * so pin both with !important to override deterministically. No .active state —
+ * the route directive never applies .active (see nav-active-state memo). */
+.navbar-default .navbar-nav > li > a { background-color: transparent !important; color: #fff !important; }
+.navbar-default .navbar-nav > li > a:hover, .navbar-default .navbar-nav > li > a:focus { background-color: #fff !important; color: #000 !important; }
 
-/* ---- navbar: selected item blends into the black bar, white text --------- */
-/* Active chip = the bar's own #000 with #fff text, ALL three states. Base sets
- * active bg #6C9032 but its :hover rule drops bg to #fff with no color, so the
- * text fell back to dark = invisible. Pin bg #000 + color #fff on every state so
- * it never lands on white. !important beats the base rules. */
-.navbar-default .navbar-nav > .active > a,
-.navbar-default .navbar-nav > .active > a:hover,
-.navbar-default .navbar-nav > .active > a:focus {
-  background-color: #000 !important;
-  color: #fff !important;
-}
+/* ---- panels / tables: lift base-grey surfaces to white off the ice-blue page */
+.panel, .well, #status .col-gray, .col-gray { background: var(--zero-panel); border-color: var(--zero-line); }
+.table > tbody > tr > td, .table > thead > tr > th { border-top-color: var(--zero-line); }
 
-/* ---- panels / tables (the Label | value rows) --------------------------- */
-.panel, .well, #status .col-gray, .col-gray {
-  background: #ffffff; background: var(--zero-panel);
-  border-color: #dbe4ec; border-color: var(--zero-line);
-}
-.table > tbody > tr > td,
-.table > thead > tr > th { border-top-color: #dbe4ec; border-top-color: var(--zero-line); }
-.table-hover > tbody > tr:hover { background: rgba(26, 94, 156, .06); } /* faint blue row hover */
+/* ---- selected currency in the dropdown (base highlights li.active, but the
+ * markup puts .active on the <a>, so add our own) — faint blue wash --------- */
+.dropdown-menu > li > a.active, .dropdown-menu > li > a.active:hover { color: var(--zero-link); background: rgba(26, 94, 156, .08); }
 
-/* ---- hashes: use loaded Ubuntu (Ubuntu Mono isn't loaded) --------------- */
-.ellipsis, td.ellipsis, .hash, a[href^="block/"], a[href^="tx/"], a[href^="address/"] {
-  font-family: Ubuntu, sans-serif;
-  letter-spacing: .01em;
-}
-
-/* ---- active currency highlight in the dropdown -------------------------- */
-.dropdown-menu > li > a.active,
-.dropdown-menu > li > a.active:hover {
-  color: #1a5e9c; color: var(--zero-link);
-  background: rgba(26, 94, 156, .08);
-}
-
-/* ---- unify the two top green boxes to the darker olive ------------------ */
-/* Base gives the search input #7CAD23 (poor white-text contrast) and the
- * conn/status box #597338. Match both to #597338. !important: base .navbar-form
- * .form-control outranks a bare #search. */
-.navbar-form .form-control,
-#search {
-  background-color: #597338 !important;
-  color: #fff !important;
-}
-/* placeholder: lighten slightly so it reads on the darker olive */
-#search::-webkit-input-placeholder { color: #cfe3a6 !important; }
-#search::-moz-placeholder { color: #cfe3a6 !important; }
-#search:-ms-input-placeholder { color: #cfe3a6 !important; }
-
-/* ---- search box focus affordance ---------------------------------------- */
-#search:focus, .form-control:focus {
-  border-color: #1a5e9c; border-color: var(--zero-link);
-  box-shadow: 0 0 0 2px rgba(26, 94, 156, .25);
-}
+/* ---- search box: match the bright base green to the Conn box olive ------ */
+.navbar-form .form-control, #search { background-color: #597338 !important; }
