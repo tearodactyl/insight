@@ -27,13 +27,19 @@ How image paths resolve
 -----------------------
 
 `public/index.html` sets `<base href="/" />`, so **every relative URL resolves
-against the site root**, which nginx maps to this `public/` tree. Reference an
-image by its path relative to `public/`, with **no leading slash**:
+against the site root** (`https://<host>/…`). The UI is **not** served from the
+site root, though: nginx `proxy_pass`es to bitcore (`http://127.0.0.1:3001/`),
+which mounts the whole UI under **`/insight/`** (verified: origin
+`/insight/css/custom.css` → 200, bare `/css/custom.css` → 404). A relative asset
+URL therefore only resolves because the page itself is loaded under `/insight/`
+and the browser requests it relative to that document. Reference an image by its
+path **relative to the current page**, with **no leading slash** — a leading
+slash escapes the `/insight/` mount and 404s:
 
 ```html
-<img data-ng-src="img/logo.svg" alt="Zero">   <!-- correct -->
-<img src="/img/logo.svg">                       <!-- WRONG: server root, 404 behind nginx -->
-<img src="../img/logo.svg">                      <!-- WRONG: base makes ../ meaningless -->
+<img data-ng-src="img/logo.svg" alt="Zero">   <!-- correct: relative, stays under /insight/ -->
+<img src="/img/logo.svg">                       <!-- WRONG: site root, escapes the /insight/ mount -> 404 -->
+<img src="../img/logo.svg">                      <!-- WRONG: base href="/" makes ../ meaningless -->
 ```
 
 Use `data-ng-src` (not `src`) when the element is inside an Angular scope, to
@@ -108,14 +114,23 @@ What it changes:
   so the search text is legible. `!important` is required because the base search
   rule is a two-selector rule that outranks a bare `#search`. Placeholder text is
   lightened (`#cfe3a6`) to read on the darker green.
-- **Navbar left BLACK as designed** — an earlier attempt to force it white made
-  white-on-white invisible links, so the navbar surface/link colors are NOT
-  touched. Only an additive **gold underline** (`#d9b227`) marks the active nav
-  item, plus a gold focus ring on the search box.
-- **Links** stay deep blue (`#1a5e9c`, darker on hover) — gold is reserved for
-  brand/active-nav only, so link color is decoupled from the gold accent.
-- **Hashes** get tabular monospace on the most-read elements for readability;
-  panels/tables get faint blue-grey hairlines and a faint gold row-hover.
+- **Navbar left as designed** — an earlier attempt to force the bar
+  white made white-on-white invisible links, so the navbar surface/link colors
+  are NOT touched (white links on the black bar).
+- **Selected nav item kept legible (white/black inversion)** — base
+  `main.min.css` styles the selected (`.active`) item with a colored background +
+  white text, but that wasn't reliably winning (so it rendered dark on the black
+  bar), and its *hover* rule sets only a white background with **no text color**
+  (white-on-white on hover). The override inverts the selected item to **white
+  background + black text in all states (rest/hover/focus)** with `!important` —
+  a clear "pressed" cue that can never go invisible. Unselected items are
+  unaffected.
+- **Links and accents** are a single deep-blue family (`#1a5e9c`, darker
+  `#0f3f6e` on hover) — links, the active-currency dropdown highlight, the
+  search focus ring, and the table row-hover all draw from this one color.
+- **Hashes** are kept in the loaded Ubuntu font on the most-read elements for
+  readability; panels/tables get faint blue-grey hairlines and a faint blue
+  row-hover.
 
 The "About" panel copy in `views/index.html` was also rewritten with clickable
 links: **open-source** → the `insight-ui-zero` repo, **Zero Currency** → the

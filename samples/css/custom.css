@@ -8,21 +8,16 @@
  * Design note: this is a LIGHT theme, deliberately. The base main.min.css is
  * light; tinting the page surface a very pale cool blue works WITH that
  * cascade (existing dark text / borders / Bootstrap components keep working),
- * instead of fighting it like a dark inversion would. The ice-blue + warm-gold
- * pairing echoes the Arctic glacier-lagoon palette of the Zero wallet
- * reference. Palette is approximate / sampled-by-eye — tune later if a spec
- * lands.
+ * instead of fighting it like a dark inversion would. Palette is a single
+ * ice-blue family: a cool grey-blue page surface, white panels, deep-blue
+ * links/accents. Sampled-by-eye — tune later if a spec lands.
  *
- *   --zero-bg      #eef4f9   page background (very, very light ice blue)
+ *   --zero-bg      #eef1f4   page background (very, very light ice blue)
  *   --zero-panel   #ffffff   table/panel surface (pure white, lifts off bg)
- *   --zero-gold    #d9b227   accent: brand + active nav only (NOT links)
- *                            (a touch darker than the wallet ring so it has
- *                             contrast on a light background)
- *   --zero-gold-d  #b89420   gold hover/active (darker)
  *   --zero-text    #1f2933   primary text (near-black slate, not pure black)
  *   --zero-muted   #6b7480   secondary/label text
  *   --zero-line    #dbe4ec   hairline borders (faint blue-grey)
- *   --zero-link    #1a5e9c   links: deep blue that contrasts the ice-blue bg
+ *   --zero-link    #1a5e9c   links + accents: deep blue against the ice-blue bg
  *   --zero-link-h  #0f3f6e   link hover/focus (darker navy)
  *
  * CSS custom properties degrade gracefully; literal fallbacks follow each use
@@ -36,14 +31,11 @@
    * cast, still off-white against the #fff panels. */
   --zero-bg: #eef1f4;
   --zero-panel: #ffffff;
-  --zero-gold: #d9b227;
-  --zero-gold-d: #b89420;
   --zero-text: #1f2933;
   --zero-muted: #6b7480;
   --zero-line: #dbe4ec;
-  /* Links stay blue (not gold) — just deep enough to contrast the ice-blue
-   * page surface; darker still on hover. Gold is reserved for brand / active
-   * nav, so link color is intentionally decoupled from --zero-gold. */
+  /* Links + all accents: deep blue, just enough to contrast the ice-blue page
+   * surface; darker still on hover. */
   --zero-link: #1a5e9c;
   --zero-link-h: #0f3f6e;
 }
@@ -74,12 +66,27 @@ a:hover, a:focus { color: #0f3f6e; color: var(--zero-link-h); }
  * `.navbar-default{background-color:#000000}` with near-white links (#F4FBE8)
  * and a white brand — a coherent dark bar. An earlier attempt to force it white
  * created white-on-white invisible links, so we don't touch the navbar surface
- * or link colors here. Only the active-item gold underline is layered on as an
- * additive cue (it adds a border, doesn't fight the existing colors).
+ * or link colors here. The selected-item cue is the white/black inversion below.
  * See [[custom-css-cascade-important]]. */
-.navbar-default .navbar-nav > li.active > a,
-.navbar-default .navbar-nav > li > a.active {
-  border-bottom: 2px solid #d9b227; border-bottom: 2px solid var(--zero-gold);
+
+/* ---- selected (active) nav item: black/white only, legible in every state - */
+/* Top bar is black with white links. The selected item ('active' on the <li>
+ * via `data-ng-class="{active:$uiRoute}"`) otherwise renders DARK on the black
+ * bar: the base green rule
+ *   .navbar-nav>.active>a, ...>.active>a:focus { background:#6C9032; color:#fff }
+ * isn't reliably winning, and the base HOVER rule sets ONLY a background, NO
+ * color
+ *   .navbar-nav>li>a:hover, ...>.active>a:hover { background-color:#fff }
+ * so hovering a selected item lands white text on a white bg.
+ * Fix: invert the selected item to a white background + black text — a clear
+ * "pressed" state — held through rest / hover / focus so it never goes
+ * white-on-white or dark-on-black. !important beats the base active/hover rules
+ * and the #000 bar. See [[custom-css-cascade-important]]. */
+.navbar-default .navbar-nav > .active > a,
+.navbar-default .navbar-nav > .active > a:hover,
+.navbar-default .navbar-nav > .active > a:focus {
+  background-color: #fff !important;  /* selected: white bg, all states */
+  color: #000 !important;             /* selected: black text, all states */
 }
 
 /* ---- panels / tables (the Label | value rows) --------------------------- */
@@ -89,19 +96,22 @@ a:hover, a:focus { color: #0f3f6e; color: var(--zero-link-h); }
 }
 .table > tbody > tr > td,
 .table > thead > tr > th { border-top-color: #dbe4ec; border-top-color: var(--zero-line); }
-.table-hover > tbody > tr:hover { background: rgba(217, 178, 39, .06); } /* faint gold row hover */
+.table-hover > tbody > tr:hover { background: rgba(26, 94, 156, .06); } /* faint blue row hover */
 
-/* ---- hash readability: tabular monospace on the most-read elements ------ */
+/* ---- hash readability: keep the most-read elements in Ubuntu ------------ */
+/* Was "Ubuntu Mono" — but only "Ubuntu" is loaded (index.html), so Ubuntu Mono
+ * fell back to Menlo/Consolas/generic monospace, a visible font swap. Use the
+ * loaded Ubuntu so these match the rest of the page (no mono fallback). */
 .ellipsis, td.ellipsis, .hash, a[href^="block/"], a[href^="tx/"], a[href^="address/"] {
-  font-family: "Ubuntu Mono", "SFMono-Regular", Menlo, Consolas, monospace;
+  font-family: Ubuntu, sans-serif;  /* match the base nav rule's font stack */
   letter-spacing: .01em;
 }
 
 /* ---- active currency highlight in the dropdown -------------------------- */
 .dropdown-menu > li > a.active,
 .dropdown-menu > li > a.active:hover {
-  color: #d9b227; color: var(--zero-gold);
-  background: rgba(217, 178, 39, .08);
+  color: #1a5e9c; color: var(--zero-link);
+  background: rgba(26, 94, 156, .08);
 }
 
 /* ---- unify the two top green boxes -------------------------------------- */
@@ -127,6 +137,6 @@ a:hover, a:focus { color: #0f3f6e; color: var(--zero-link-h); }
 
 /* ---- search box focus affordance ---------------------------------------- */
 #search:focus, .form-control:focus {
-  border-color: #d9b227; border-color: var(--zero-gold);
-  box-shadow: 0 0 0 2px rgba(217, 178, 39, .25);
+  border-color: #1a5e9c; border-color: var(--zero-link);
+  box-shadow: 0 0 0 2px rgba(26, 94, 156, .25);
 }
