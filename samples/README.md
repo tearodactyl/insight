@@ -137,13 +137,6 @@ links: **open-source** → the `insight-ui-zero` repo, **Zero Currency** → the
 `Zero` repo, and **Github Issue tracker** → the issues page. The "About" heading
 is kept.
 
-> Cache note: `custom.css` and the `views/*.html` are static assets served by
-> `express.static` (read from disk per request, no content caching), so a
-> `systemctl restart bitcore.service` has **no** effect on their visibility. Only
-> the Cloudflare edge cache (a 4h TTL CF injects — see `clng.md`) + the browser
-> cache gate them. **Purge Cloudflare after every static deploy** or edits sit
-> invisible behind the edge.
-
 Bundle classes / assets relied on (all confirmed present)
 ---------------------------------------------------------
 
@@ -182,8 +175,7 @@ cp -p "$LIVE/includes/header.html" "$LIVE/includes/header.html.$ts"  # rollback 
 cp samples/views/includes/header.html "$LIVE/includes/header.html"
 ```
 
-No build step. The change is live on the next page load — but for **static assets
-served behind Cloudflare** (`custom.css`, `views/*.html`), hard-refresh AND purge
-the Cloudflare edge cache (4h injected TTL — see `clng.md`); a bitcore restart
-does nothing for them. Roll back by copying the timestamped backup back over the
-original. Nothing reaches the host until you copy it there explicitly.
+No build step, no `bitcore` restart — these are `express.static` files. The edit is
+live once the caches in front are flushed; see
+[InsightFix.md](../InsightFix.md#flushing-caches-after-a-static-deploy). Roll back by
+copying the timestamped backup back over the original.

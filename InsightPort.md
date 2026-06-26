@@ -1,9 +1,6 @@
 # InsightPort — Lineage, Ecosystem Status, Component Versions & Porting
 
-Companion to [InsightBlock.md](InsightBlock.md) (the central operations reference)
-and [InsightFix.md](InsightFix.md) (crash signatures and staged hardening); the
-[README](README.md) holds the documentation map. This
-document covers **where the code came from, what state the in-family Insight
+This document covers **where the code came from, what state the in-family Insight
 ecosystem is in, what versions run in production, and what is worth porting in**.
 
 ---
@@ -298,29 +295,17 @@ Note: shielded transactions intentionally hide sender/recipient/amount, so no UI
    model, custom komodod dev branch). Do NOT bulk-merge — adopt patterns/ideas, not code,
    and reconcile each piece deliberately.**
 
-### Concrete cherry-pick targets (verified against the local clones)
+### Where the parallel projects and upstream are ahead of Zero
 
-Ranked by value-to-risk. File paths and commits below were verified by inspecting the local Zero clones and the sibling commit histories on 2026-06-20/21.
+What another project or upstream carries that Zero does not — i.e. a different, newer,
+or missing implementation worth evaluating. Items Zero already carries identically are
+not listed; the point of the evaluation is the divergence. Paths and commits were
+verified against the local Zero clones and sibling commit histories on 2026-06-20/21.
 
-High value, do these:
-
-1. Pirate transaction version 5 / Orchard support — **NOT applicable to Zero**; listed here only to close the question. Zero is Sapling-v4 and its chain has no NU5/Orchard/v5 (confirmed: zero references to orchard/nu5/saplingv5/`version >= 5` anywhere in the local source). So there are no v5 transactions for the parser to decode, and porting Pirate's v5 work would add dead code. For reference, Pirate did add it in `bitcore-lib-pirate` `f8c8169` ("Add Transaction Version 5", 2024-10-16) with a follow-up `f6b2de2` ("try/catch", 2024-11-01) and `insight-api-pirate` `131a657` (2024-10-13) — relevant only if Zero ever adopts an NU5-style upgrade on-chain, which is not on the roadmap. Note: the §7 crash #1 (`RangeError` in the tx parser) is a malformed/truncated ZMQ frame, fixed locally by a try/catch (see [InsightFix.md](InsightFix.md)), and has nothing to do with tx version 5.
-
-2. **bn.js version bump (bitcore-lib-zero).** Zero's `bitcore-lib-zero` pins `bn.js =2.0.4`; the upgrade target is the upstream `5.2.3` (the ProphetAlgorithms side-branch bump). A 2.x→5.x jump with API breaks — not drop-in; track it as its own test-gated change, not bundled with the crash deploy. Validation approach and rationale: §2 version table.
-
-3. `bitcoind.js` spawn/retry handling (bitcore-node-zero). **Resolved locally — not a Pirate cherry-pick.** The original intent was to scan Pirate's `bitcore-node-pirate` for spawn fixes, but their bitcore-node was last touched in 2021 and carries nothing relevant; the `startRetryCount: 60` workaround and the surrounding tip-load retry were reworked directly in our staged `error/bitcoind.js`. The same staged file also bundles the crash #1 rawtx-path guard and the EMFILE fd-leak fix. Full detail in [InsightFix.md](InsightFix.md).
-
-Lower value or caveated:
-
-4. Horizen generic fixes: thinner than expected. Horizen's `bitcore-lib-zen` and `bitcore-node-zen` have not been touched since 2022 — only `insight-api-zen`/`insight-ui-zen` got the 2024 commits, and those are ZEN sidechain/pool config. The one generic-looking item is `bitcore-lib-zen` `453dc40` "Fixed circular dependency" (2021); everything else recent is `zendoo`/certificate/sidechain work specific to ZEN. So Horizen is worth a one-time read of `bitcore-lib-zen` for clean parsing/networks fixes, but it is not a rich source and most of its activity does not apply to Zero.
-
-Already present in Zero, do NOT re-port:
-
-- `saplingblocks.js` and `witness.js` already exist in `insight-api-zero/lib/`. Pirate's 2020 Sapling-block/witness controllers are the same lineage Zero already carries; there is nothing to import there.
-
-Requires manual three-way reconciliation (both sides edited the same files):
-
-- `currency.js` (Zero added CoinGecko handling; upstream rewrote it) and the UI changes. Do not cherry-pick these blindly. (Zero's local `currency.js` has additionally been hardened — see [InsightFix.md](InsightFix.md) crash #4 — which a reconcile must preserve.)
+- **bn.js (upstream has a fix Zero lacks).** Zero's `bitcore-lib-zero` pins `bn.js =2.0.4`; upstream `5.2.3` carries a fix Zero's pin predates. A 2.x→5.x jump has API breaks — not drop-in; track it as its own test-gated change, not bundled with the crash deploy. Validation approach and rationale: §2 version table.
+- **Horizen (evaluated, nothing portable).** `bitcore-lib-zen`/`bitcore-node-zen` untouched since 2022; the 2024 commits are all `insight-*-zen` ZEN sidechain/pool config (`zendoo`/certificate/sidechain-specific). The one generic-looking item, `bitcore-lib-zen` `453dc40` "Fixed circular dependency" (2021), is N/A to Zero (Zero never had the `Block↔BlockHeader` cycle). Reviewed and closed — no portable change.
+- **`currency.js` (diverged — needs three-way reconcile).** Zero added CoinGecko handling; upstream rewrote the same file; both sides edited it. Do not cherry-pick blindly — Zero's local `currency.js` is additionally hardened (InsightFix.md crash #4), which a reconcile must preserve.
+- **Pirate transaction version 5 / Orchard (sibling has it; not relevant to Zero's chain).** Pirate carries v5/Orchard; Zero is Sapling-v4 with no NU5/Orchard activated, so there are no v5 transactions to decode and nothing to port — unless Zero ever activates an NU5-style upgrade on-chain, at which point this becomes a live target.
 
 ---
 
@@ -411,8 +396,7 @@ shipped:
 
 - **`public/views/**/*.html` Angular templates** take effect with **no build** —
   templates are loaded at runtime. This is why the deployed `connection.html`
-  banner fix (see [InsightFix.md](InsightFix.md)) shipped clean without anyone
-  running grunt.
+  banner fix shipped clean without anyone running grunt.
 - **A `custom.css` overlay**, layered after `main.min.css` via one extra `<link>`,
   carries theme/colour tuning without touching the built CSS bundle. (`main.min.css`
   is never hand-edited and is byte-identical to the upstream-generated bundle.)

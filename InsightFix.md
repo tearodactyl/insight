@@ -1,8 +1,5 @@
 # InsightFix — Crash signatures, mitigations, and deployed hardening
 
-Companion to [InsightBlock.md](InsightBlock.md) (the central operations reference)
-and [InsightPort.md](InsightPort.md) (lineage, ecosystem, versions, porting).
-
 This document is the operational record of how the Zero Insight explorer
 (`bitcore` process, Node v8.17.0) crashes in production, what each crash's log
 signature looks like, and the fix in place for it. Each entry gives the signature,
@@ -131,10 +128,8 @@ both must be shut** — deploying only one leaves the other wide open:
 
 **Design note — `warn`, not `error`.** A malformed ZMQ frame is *expected*
 untrusted input and the process recovers fully by dropping it — that is the
-definition of `warn`. `error` is reserved for "the node is broken." This crash
-needs **no sibling cherry-pick** — it is local hardening. (Note: this is unrelated
-to Pirate's "tx version 5" work, which does not apply to Zero — see
-[InsightPort.md](InsightPort.md) §5.)
+definition of `warn`. `error` is reserved for "the node is broken." This crash is
+local hardening, not a port from any sibling project.
 
 ### 2.2 Crash #3 — JS-heap OOM from an oversized response
 
@@ -209,7 +204,7 @@ confirmations) is **≈ 260–280 B** — the empirical unit rate. Two anchors h
 - *Calculated:* at the `MAX_UTXOS = 100,000` cap, 100k × 260–280 B ≈ **26–38 MB** — the
   full range, still under the 50 MB ceiling with margin. (The `addresses.js` source
   comment currently rounds the calibration body to "~30 MB" and cites only the 38 MB
-  top of the range; the measured figure is 20.7 MB — a comment fix is tracked in §5.)
+  top of the range; the measured figure is 20.7 MB.)
 
 So 100k is the largest count cap that *cannot* breach the byte ceiling even at the
 280 B upper bound, while still serving the common-large whale class whole. By
@@ -218,7 +213,7 @@ crash-#3 abort. **Decision: keep caps at 100k.** Do NOT raise them to serve the
 mega-addresses in full — that re-introduces the OOM we just closed. Note the cap
 currently rejects only *after* the node returns the full UTXO set, so the 413 path is
 slow on the mega-addresses (the upstream fetch cost remains); a pre-count /
-pagination is the durable fix (tracked in §5). These high-volume addresses are
+pagination is the durable fix. These high-volume addresses are
 **known mega-addresses** — a `/utxo` 413 on them is expected, not a regression.
 
 **Design note.** Pagination machinery already exists (`transactions.js` paginates
@@ -472,32 +467,42 @@ healthy, so verification is done by **forcing the banner** without disturbing ze
    served template carries no `translate` attribute on the `!apiOnline` `<p>` and no
    "zcashd".
 
+### Flushing caches after a static deploy
+
+This applies to **static assets only** — `custom.css`, the `views/*.html` templates,
+images — served by `express.static`, which reads from disk per request and holds no
+content cache. A `bitcore` restart has **no** effect on what a client sees for these;
+the gate is the caches in front. (Backend `.js` changes are the opposite case:
+`express.static` does not apply, the file is loaded into the running Node process at
+startup, so a `bitcore` restart — `systemctl restart bitcore.service` if running under
+systemd — **is** required for the change to take effect, and no cache-flush is
+involved.)
+
+For a static asset, a served-bytes check (above) that still returns the old md5 after
+the file on disk has changed means a cache layer in front is serving a stale copy.
+Flush each caching layer the request passes through, front to back, then hard-reload
+the browser; the served-bytes check should then match the on-disk file.
+
+- **Reverse proxy (nginx).** Only if a `proxy_cache` is configured (the sample vhost
+  in [`config/nginx-default`](config/nginx-default) configures none, so nothing to
+  flush there). If one is added later, purge its cache zone or `systemctl reload
+  nginx` per that config.
+- **CDN / edge.** If the site is fronted by a CDN (e.g. Cloudflare, or another
+  provider), the edge caches static assets and may apply its own TTL regardless of the
+  origin `Cache-Control`. **Purge the CDN edge cache after every static deploy** —
+  via the provider's dashboard or API — or the edge serves the stale asset until its
+  TTL expires. This is the layer that most often masks a deploy.
+- **Browser.** Force a cache-bypassing reload of the page so the browser re-fetches
+  the asset instead of serving its own cached copy. In Chrome: **Ctrl+Shift+R** on
+  Windows, **Ctrl+Shift+R** on Linux, **Cmd+Shift+R** on macOS. (DevTools open →
+  right-click reload → "Empty Cache and Hard Reload" is the exhaustive variant.)
+
+Re-run the served-bytes md5 check after flushing; a match confirms the deploy is live
+end to end.
+
 ---
 
-## 5. The rest to merge (not yet done)
-
-| Item | Why deferred | Track as |
-|---|---|---|
-| **bn.js 2.0.4 → 5.2.3** in `bitcore-lib-zero/package.json` | A 3-major-version jump with changed API/behavior — unsafe as an in-place file swap. Needs `npm install` + bitcore-lib test suite + parse/sign smoke test. Not a crash fix, so it does **not** block the crash deploy. | Its own test-gated change. Version target: [InsightPort.md](InsightPort.md) §2. |
-| **In-process bad-frame rate counter** | The try/catch branches in `index.js`/`bitcoind.js` currently log every bad frame at `warn`. A counter (per-window) that escalates to a single `error` above a threshold turns "occasional malformed frame" into a signal without log-spam. Designed, not wired. | Add to the bad-frame branches when wiring observability (below). |
-
-### Observability for the bad-frame branches (planned)
-
-A single bad frame is noise; a *stream* is a buggy peer or an attacker probing the
-parser. Three layers:
-
-1. **In-process rate counter** (above) — `warn` below threshold, one `error` above.
-2. **Attribution must come from zerod.** ZMQ strips the peer IP before the frame
-   reaches bitcore, so the source is unknowable at this layer. Cross-reference
-   `zero-cli getpeerinfo` and the `Misbehaving` lines in zerod's `debug.log`. A
-   spike in bitcore bad-frame warns lined up against a misbehaving peer is the
-   attribution.
-3. **Banning** is a zerod action: `zero-cli setban <ip> add`. bitcore has no peer
-   table to ban from.
-
----
-
-## 6. Deploy / rollback (pointer)
+## 5. Deploy / rollback (pointer)
 
 Deploying these fixes (the supported path: update the explorer packages and
 revalidate) is [InsightBlock.md §5.7](InsightBlock.md#57-deploying-updated-explorer-packages).
@@ -508,7 +513,7 @@ fd-locks are kernel-owned), the backup convention, and the rollback path live in
 
 ---
 
-## 7. Monitoring — verifying the fixes hold
+## 6. Monitoring — verifying the fixes hold
 
 Each fix has a cheap health check. Run these from the host; the service runs as
 `bitcore.service` under systemd in **connect** mode. (Set the journal window to your
@@ -536,9 +541,8 @@ journalctl -u bitcore.service --since '<deploy-date>' \
 
 Occasional lines = the guard working. A *stream* of them = a buggy/abusive peer —
 cross-reference `zero-cli getpeerinfo` and `Misbehaving` in zerod's `debug.log` for
-attribution (ZMQ strips the peer IP before bitcore sees the frame; the in-process
-rate counter in §5 is the planned escalation). Ban from zerod, not bitcore:
-`zero-cli setban <ip> add`.
+attribution (ZMQ strips the peer IP before bitcore sees the frame). Ban from zerod,
+not bitcore: `zero-cli setban <ip> add`.
 
 **Crash #3 (oversized response).** Confirm the caps fire on a high-volume
 mega-address with a clean `413`, not an abort (substitute a known mega-address):
@@ -569,38 +573,39 @@ version depending on shell/PATH). Use the explicit nvm path to the v8.17.0 binar
 
 ---
 
-## 8. Known issue — residual `zcashd` strings in `bitcoind.js`
+## 7. Known issue — residual `zcashd` strings in `bitcoind.js`
 
-`bitcore-node-zero/lib/services/bitcoind.js` still carries inherited `zcashd`
-strings from the str4d Zcash lineage. One is a latent bug; the rest are cosmetic:
+`bitcore-node-zero/lib/services/bitcoind.js` carries inherited `zcashd` strings from
+the str4d Zcash lineage. Line 876 is a functional bug; the rest are message text.
 
-| Line | Text | Kind | Risk |
-|---|---|---|---|
-| **876** | `var pidPath = spawnOptions.datadir + '/zcashd.pid'` | **filesystem path** | **latent bug** |
-| 345-347 | `'...in zcashd config options'` (×3 checkArgument) | error string | cosmetic |
-| 431 | `'...zcashd is undergoing a reindex.'` | log warn | cosmetic |
-| 976 | `'Stopping while trying to spawn zcashd.'` | error string | cosmetic |
-| 1015 | `'Stopping while trying to connect to zcashd.'` | error string | cosmetic |
-| 2253 | `'zcashd spawned process exited with status code: '` | error string | cosmetic |
-| 2265 | `'zcashd process did not exit'` | error string | cosmetic |
+| Line | Text | Kind |
+|---|---|---|
+| **876** | `var pidPath = spawnOptions.datadir + '/zcashd.pid'` | **filesystem path — bug** |
+| 345-347 | `'...in zcashd config options'` (×3 checkArgument) | error string |
+| 431 | `'...zcashd is undergoing a reindex.'` | log warn |
+| 976 | `'Stopping while trying to spawn zcashd.'` | error string |
+| 1015 | `'Stopping while trying to connect to zcashd.'` | error string |
+| 2253 | `'zcashd spawned process exited with status code: '` | error string |
+| 2265 | `'zcashd process did not exit'` | error string |
 
-**Line 876 is a latent bug, not cosmetic.** It is the pidfile path the orchestrator
-watches in the data directory:
-
-```js
-var pidPath = spawnOptions.datadir + '/zcashd.pid';
-```
-
-The Zero daemon writes **`zerod.pid`**, so this lookup targets a file that does not
-exist. The pidfile-based liveness / clean-shutdown check keyed on `pidPath` never
-matches; the code falls through to the spawned-process handle, masking the bug —
-which is why it has not surfaced as a crash. The fix is a one-line retarget:
+**Line 876 — wrong pidfile name in the spawn-mode orphan reaper.** `_stopSpawnedBitcoin`
+reads `pidPath` to find and `SIGINT` a zerod that a prior spawn left orphaned in the
+datadir, before launching a new one. It targets `zcashd.pid`, but the Zero daemon
+writes `zerod.pid`, so the read hits `ENOENT` and the function treats it as "no orphan,
+continue" — silently failing to reap a genuinely orphaned zerod, the path to the #2
+EMFILE/datadir-lock failure. It is spawn-mode-only, so the live **connect** deployment
+never executes it; but spawn is a supported deployment choice, so for a spawn-mode
+install this is an active bug, not dormant. Fix is a one-line retarget:
 
 ```js
 var pidPath = spawnOptions.datadir + '/zerod.pid';
 ```
 
-It is a **behavioral** change, so it needs a code review + redeploy of `bitcoind.js`;
-after the change, verify the orchestrator reads `zerod.pid` from the datadir on
-restart. The remaining lines (345-347, 431, 976, 1015, 2253, 2265) are user-facing
-message text only; safe to retarget `zcashd`→`zerod` in the same revision.
+This is the portable fix (`fs.readFile` + `process.kill` work on any Node host,
+including non-Linux). A Linux-only reaper keyed on the datadir lock-holder
+(`lsof ~/.zero/.lock`) + process parentage would be more robust where available, but
+must not replace the portable pidfile path for cross-platform spawn installs.
+
+Behavioral change → code review + `bitcoind.js` redeploy, validated in a spawn-mode
+window (connect mode never exercises this path). The remaining lines are user-facing
+message text; safe to retarget `zcashd`→`zerod` in the same revision.
