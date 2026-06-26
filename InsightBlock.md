@@ -33,9 +33,9 @@ client ──TLS──> nginx :443 ──cleartext──> bitcore :3001 ──RP
   `/insight`, API at `/insight-api-zero/...`.
 
 The stack runs on Node v8.17.0 — the last 8.x, EOL 2019-12-31 — against a
-dependency tree frozen circa 2021. A Node bump would force revalidating that whole
+dependency tree frozen circa 2021. A Node bump would require revalidating that whole
 tree, with native rebuilds for zeromq, leveldown, and secp256k1. The posture is
-therefore *harden in place*.
+therefore to maintain and harden the stack in place rather than upgrade the runtime.
 
 ### 1.1 Ports
 
@@ -325,9 +325,40 @@ The order below stands up the whole stack on a clean Ubuntu 18.04 host. zerod's 
 install and general configuration follow Zero's upstream documentation; only the
 Insight-specific pieces are spelled out here.
 
-1. **Node runtime.** Install nvm and `nvm install 8.17.0`. Everything below assumes
-   that interpreter at `/home/ubuntu/.nvm/versions/node/v8.17.0/bin/node`; the
-   system `/usr/bin/node` is never used (§2.1).
+1. **Node runtime.** Install nvm, then `nvm install 8.17.0` and `nvm alias default
+   8.17.0`. This yields `/home/ubuntu/.nvm/versions/node/v8.17.0/bin/{node,npm}`
+   (npm pairs as 6.13.4); everything below assumes that interpreter, and the system
+   `/usr/bin/node` is never used (§2.1).
+
+   So that ad-hoc tooling (`node --check` of a staged file, scripts) runs under the
+   same runtime as the service, make every shell form resolve to it. nvm is normally
+   sourced from `~/.bashrc`; if that source sits *below* the interactive guard
+   (`[ -z "$PS1" ] && return`), non-interactive shells skip nvm and `node` falls
+   through to `/usr/bin/node` (§2.1). Load nvm **above** the guard:
+
+   ```sh
+   # in ~/.bashrc, ABOVE the interactive guard:
+   export NVM_DIR="$HOME/.nvm"
+   [ -s "$NVM_DIR/nvm.sh" ] && \. "$NVM_DIR/nvm.sh" --no-use
+   nvm use default >/dev/null 2>&1
+   # in ~/.profile, for login shells (belt-and-suspenders):
+   export NVM_DIR="$HOME/.nvm"
+   [ -s "$NVM_DIR/nvm.sh" ] && \. "$NVM_DIR/nvm.sh"
+   ```
+
+   Verify all three shell forms resolve to v8.17.0:
+
+   ```sh
+   node --version              # v8.17.0  (non-interactive)
+   bash -lc "node --version"   # v8.17.0  (login)
+   bash -ic "node --version"   # v8.17.0  (interactive)
+   ```
+
+   The service itself is unaffected by any of this — `bitcore.service` pins the
+   absolute node path in `ExecStart` (§4.2) — but matching the CLI prevents checking
+   a staged fix under the wrong version. For any check that must match the live
+   runtime, use the explicit path: `NODE=/home/ubuntu/.nvm/versions/node/v8.17.0/bin/node;
+   $NODE --check <file>`.
 
 2. **zerod.** Build/place `zerod`, `zero-cli`, `zero-tx` in `~/zero/BIN` per Zero's
    own docs, then write `~/.zero/zero.conf`. Use Zero's documentation for the general
@@ -431,6 +462,13 @@ shell on the word. Identify it deterministically:
 of the spawned zerod, `ps -o ppid= -C zerod`.
 
 ### 4.2 systemd model
+
+This is the process-management setup we run; the units below are the minimum that
+keeps zerod and bitcore up and correctly coupled. An operator may manage the two
+processes by other means — the units in [`config/`](config/) are working samples,
+not a requirement — but the couplings called out here (the connect-mode follower
+relationship, the v237 directive placements) are what make the stack behave under
+restart and reboot, so a different supervisor must reproduce their effect.
 
 Both units are deployed, enabled, and boot-persistent. Full text in
 [`config/zerod.service`](config/zerod.service) and
@@ -632,9 +670,37 @@ Upgrade discipline: snapshot `bitcore-node.json` and the units, note the height
 `systemd-analyze verify` the units, start zerod and wait for RPC, start bitcore,
 then run the §4.6 verification. Roll back via §5.4 if any check fails.
 
----
+### 5.7 Deploying updated explorer packages
 
-## 6. Logging
+The four explorer packages (`bitcore-lib-zero`, `bitcore-node-zero`,
+`insight-api-zero`, `insight-ui-zero`) install from the `zerocurrencycoin` repos
+(InsightPort.md §1). The supported way to take a fix or change is to deploy the
+updated repos and revalidate — the same path a fresh install (§4.0) follows, run
+against an existing host. The patched reference files under [`error/`](error/) and
+their analysis in InsightFix.md document *what* each fix changes; the deploy itself
+is a package update, not a file edit in `node_modules`.
+
+The stack is in connect mode, so this never touches zerod or the datadir — only the
+bitcore process and its loaded modules.
+
+```sh
+# snapshot state and note the height for comparison after
+cp ~/zero/mynode/bitcore-node.json ~/zero/mynode/bitcore-node.json.$(date +%Y%m%d-%H%M%S)
+zero-cli -datadir=/home/ubuntu/.zero getblockcount
+
+sudo systemctl stop bitcore                          # zerod stays up (connect mode)
+cd ~/zero/mynode
+# update the packages to the target commits, then:
+npm install                                          # rebuilds against the pinned Node 8.17.0
+# UI note: insight-ui-zero ships as source; if its built bundle changed, the UI
+# build must be run (§4.0 step 4). Template-only changes need no build.
+sudo systemctl start bitcore
+```
+
+Then run the §4.6 verification (one zerod, connect mode, API serving the live tip)
+plus any fix-specific check from InsightFix.md. If a check fails, restore the prior
+`node_modules`/config and restart; keep the previous install until the update has
+soaked clean.
 
 The single sink is the journal — both units log `StandardOutput=journal` and
 `StandardError=journal`, giving per-boot separation and rotation with no flat-file to
@@ -673,12 +739,19 @@ matching `cat /etc/machine-id`) is safe to `rm -rf`.
 
 ## 7. nginx
 
-TLS terminates at nginx — Certbot certs under `/etc/letsencrypt/live/` — and it
-reverse-proxies cleartext to bitcore on `:3001`. Single site file,
-[`config/nginx-default`](config/nginx-default), a symlink target in
-`sites-available/`; `conf.d/` is empty and `nginx -t` passes. The explorer vhosts
-301 `/` to `/insight` and `proxy_pass` everything else to `127.0.0.1:3001/`. The API
-is reachable through the same proxy at `/insight-api-zero/...`.
+This section is advisory: it describes the front-end we run, as the minimum that
+works. bitcore serves the explorer on `:3001`; how an operator terminates TLS and
+reverse-proxies to it is their own infrastructure choice. The vhost in
+[`config/nginx-default`](config/nginx-default) is a working sample, not a
+requirement — any web server that proxies to `127.0.0.1:3001` and preserves the
+`/insight` and `/insight-api-zero/...` paths will serve the explorer.
+
+What we run: TLS terminates at nginx — Certbot certs under
+`/etc/letsencrypt/live/` — reverse-proxying cleartext to bitcore on `:3001`. Single
+site file (the sample above), a symlink target in `sites-available/`; `conf.d/` is
+empty and `nginx -t` passes. The explorer vhost 301s `/` to `/insight` and
+`proxy_pass`es everything else to `127.0.0.1:3001/`. The API is reachable through the
+same proxy at `/insight-api-zero/...`.
 
 There are no `proxy_read_timeout`, `proxy_buffering`, or `client_max_body_size`
 overrides, so defaults apply. The default `proxy_read_timeout 60s` is fine for short

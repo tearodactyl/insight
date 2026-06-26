@@ -478,7 +478,7 @@ healthy, so verification is done by **forcing the banner** without disturbing ze
 
 | Item | Why deferred | Track as |
 |---|---|---|
-| **bn.js 2.0.4 → 5.2.3** in `bitcore-lib-zero/package.json` | A 3-major-version jump with changed API/behavior — unsafe as an in-place file swap. Needs `npm install` + bitcore-lib test suite + parse/sign smoke test. It is a security item (ReDoS-class), not a crash fix, so it does **not** block the crash deploy. | Its own test-gated change. Source/context: [InsightPort.md](InsightPort.md) §3, §5. |
+| **bn.js 2.0.4 → 5.2.3** in `bitcore-lib-zero/package.json` | A 3-major-version jump with changed API/behavior — unsafe as an in-place file swap. Needs `npm install` + bitcore-lib test suite + parse/sign smoke test. Not a crash fix, so it does **not** block the crash deploy. | Its own test-gated change. Version target: [InsightPort.md](InsightPort.md) §2. |
 | **In-process bad-frame rate counter** | The try/catch branches in `index.js`/`bitcoind.js` currently log every bad frame at `warn`. A counter (per-window) that escalates to a single `error` above a threshold turns "occasional malformed frame" into a signal without log-spam. Designed, not wired. | Add to the bad-frame branches when wiring observability (below). |
 
 ### Observability for the bad-frame branches (planned)
@@ -499,6 +499,8 @@ parser. Three layers:
 
 ## 6. Deploy / rollback (pointer)
 
+Deploying these fixes (the supported path: update the explorer packages and
+revalidate) is [InsightBlock.md §5.7](InsightBlock.md#57-deploying-updated-explorer-packages).
 The graceful-shutdown rules (**never `kill -9` zerod** — always `zero-cli ... stop`,
 since SIGKILL forces a multi-hour dirty-shutdown reindex; **never `rm` a lock** —
 fd-locks are kernel-owned), the backup convention, and the rollback path live in
@@ -543,7 +545,7 @@ mega-address with a clean `413`, not an abort (substitute a known mega-address):
 
 ```sh
 curl -s -o /dev/null -w '%{http_code} %{time_total}s\n' \
-  https://insight.zerocurrency.io/insight-api-zero/addr/<MEGA_ADDR>/utxo
+  https://insight.zeromachine.io/insight-api-zero/addr/<MEGA_ADDR>/utxo
 # expect 413 on an ~800k-UTXO mega-address; the ~80k-UTXO address returns 200 ~20.7 MB
 ```
 

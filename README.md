@@ -20,12 +20,17 @@ client ──TLS──> nginx :443 ──cleartext──> bitcore :3001 ──RP
 The Zero packages are a rename-fork of str4d's Zcash Insight; `zerod` is a
 Zcash/bitcoin-derived full node and the authoritative data layer. The stack runs on
 Node v8.17.0 (the last 8.x, EOL 2019-12-31) against a dependency tree frozen circa
-2021, so the operating posture is **harden in place**, not upgrade — the details and
-the reasoning are in [InsightBlock.md](InsightBlock.md).
+2021. The operating posture is to maintain and harden the stack in place rather than
+upgrade the runtime; the details and the reasoning are in
+[InsightBlock.md](InsightBlock.md).
 
 This documentation assumes an expert reader: a senior Linux administrator and
 software engineer. It covers running the explorer, the crashes seen in production
 and their fixes, the fork's lineage and version walls, and host maintenance.
+
+The current state of the work: the production crash fixes are deployed (the backend
+`.js` hardening plus the "zcashd"→"zerod" banner), and a subsequent round of UI,
+theme, and image tuning has been applied to the front end. Both are covered below.
 
 ## Documentation map
 
@@ -37,7 +42,7 @@ references, and the two artifact directories [`error/`](error/) and
 |---|---|
 | [README.md](README.md) | This overview: the introduction, the documentation map, and the role-based entry points. |
 | [InsightBlock.md](InsightBlock.md) | The central reference: what the explorer is, where it lives on disk, and how to operate it — install, launch, shutdown, recovery, the systemd model, log control, nginx. Plus Appendix A (developer internals), Appendix B (integrator API), Appendix C (suggestions, unimplemented). |
-| [InsightFix.md](InsightFix.md) | The four production crash signatures, the `.tail` captures, and the deployed hardening — five backend `.js` files plus the UI "zcashd"→"zerod" banner fix (one template, `translate` directive removed); the fixes are in the package source, with patched reference copies under [`error/`](error/). Includes monitoring, sizing, and message-test procedures. |
+| [InsightFix.md](InsightFix.md) | The four production crash signatures, the `.tail` captures, and the deployed hardening — five backend `.js` files plus the UI "zcashd"→"zerod" banner fix (one template, `translate` directive removed); the fixes are in the package source, with patched reference copies under [`error/`](error/). Includes monitoring, sizing, and message-test procedures. The later UI/theme/image tuning rides on top of these fixes. |
 | [InsightPort.md](InsightPort.md) | Fork lineage, upstream/ecosystem status, component/module versions, upgrade walls, the ecosystem build-toolchain & Node-pinning survey (grunt/bower/gulp, the grunt-rebuild wall), porting and strengthening. |
 | [`error/`](error/) | Patched reference copies of the hardened files: the five backend `.js` files (flat) plus the one UI banner template (`connection.html`) in a path-preserving `insight-ui-zero/public/…` subtree. The fixes ship in the package source; these copies are a convenient catalogued reference. See InsightFix.md. |
 | [`config/`](config/) | The deployed files verbatim: `zerod.service`, `bitcore.service`, `bitcore-node.json` (+`.spawn.bak`), `bitcore_start.sh`, `zero.conf`, `nginx-default`, `journald.conf`, `logrotate-bitcore`. |
