@@ -8,6 +8,40 @@ of the current fix with short snippets, pointing at the source file and line. Th
 fixes are in the code — a fresh `npm install` of the Zero `bitcore`/`insight`
 packages carries them; no manual file surgery is needed.
 
+## Changed-file manifest
+
+Every file this document's fixes and UI changes touch, with its path **relative to
+the root of its package repo** (the four explorer repos live side by side under the
+docs root). The backend hardening files are deployed into the package source; the
+UI files are promoted from the repo-root `samples/` staging tree (see
+[`samples/README.md`](samples/README.md)). Paths under `error/` and `samples/` are
+the catalogued/staged copies; the right-hand column is where each lands.
+
+| Repo | Path relative to repo root | What | Staged/reference copy |
+|---|---|---|---|
+| `bitcore-lib-zero` | `lib/transaction/transaction.js` | #1 diagnostic context | `error/transaction.js` |
+| `bitcore-node-zero` | `lib/services/bitcoind.js` | #1 rawtx door, #2 fd-leak/backoff | `error/bitcoind.js` |
+| `insight-api-zero` | `lib/index.js` | #1 inv door | `error/index.js` |
+| `insight-api-zero` | `lib/addresses.js` | #3 OOM cap | `error/addresses.js` |
+| `insight-api-zero` | `lib/currency.js` | #4 expired-cert price feed | `error/currency.js` |
+| `insight-ui-zero` | `public/views/includes/connection.html` | §4a banner text + positive-heartbeat box | `error/insight-ui-zero/public/views/includes/connection.html`, `samples/views/includes/connection.html` |
+| `insight-ui-zero` | `public/css/custom.css` | ice-blue light theme (new file) | `samples/css/custom.css` |
+| `insight-ui-zero` | `public/index.html` | sized-PNG favicon links + `custom.css` `<link>` | `samples/index.html` |
+| `insight-ui-zero` | `public/views/status.html` | live Start Date + colored progress bar | `samples/views/status.html` |
+| `insight-ui-zero` | `public/views/index.html` | About-panel copy with links | `samples/views/index.html` |
+| `insight-ui-zero` | `public/views/includes/header.html` | brand image + traffic-light status | `samples/views/includes/header.html` |
+| `insight-ui-zero` | `public/views/includes/currency.html` | price-feed-visibility row | `samples/views/includes/currency.html` |
+| `insight-ui-zero` | `public/views/includes/search.html` | query echo + spinner | `samples/views/includes/search.html` |
+| `insight-ui-zero` | `public/img/icons/favicon-16x16.png` | sized PNG favicon (new file) | `samples/img/icons/favicon-16x16.png` |
+| `insight-ui-zero` | `public/img/icons/favicon-32x32.png` | sized PNG favicon (new file) | `samples/img/icons/favicon-32x32.png` |
+
+The five backend files are pure source hardening and ship via a package update
+(§2); the ten UI files are HTML/CSS/asset-only and need no `grunt` rebuild — they
+are promoted by copying over the live `public/...` tree (§4a,
+[`samples/README.md`](samples/README.md)).
+
+---
+
 **Source of truth for the crashes:** saved log tails of the `bitcore` process
 dying. The captures, with when each crash was observed:
 
