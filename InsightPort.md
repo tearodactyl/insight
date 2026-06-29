@@ -1,5 +1,7 @@
 # InsightPort — Lineage, Ecosystem Status, Component Versions & Porting
 
+**Zero stack status:** The four `zerocurrencycoin/*-zero` repos are maintained for Zero mainnet. Public explorer: [insight.zeromachine.io](https://insight.zeromachine.io/). See **section 3.1**.
+
 This document covers **where the code came from, what state the in-family Insight
 ecosystem is in, what versions run in production, and what is worth porting in**.
 
@@ -170,7 +172,20 @@ upstream/dependabot/npm_and_yarn/bn.js-5.2.3   2026-02-22  f6c216e  Bump bn.js f
 - GitHub's `pushedAt` reflects the newest push across *all* branches → made a dead repo look alive.
 - The bump itself is isolated (bn.js 2.0.4 → 5.2.3) — see §2's version table for the upgrade target.
 
-**Bottom line: all four upstreams are effectively dead since May 2021.**
+**ProphetAlgorithms upstream:** all four `*-zero` repos on `master` are effectively frozen since **May 2021** (Dependabot side branches excepted).
+
+### 3.1 Zero org repos
+
+| Repo | Role |
+|------|------|
+| **insight-api-zero** | REST API |
+| **bitcore-lib-zero** | Tx/block parsing |
+| **bitcore-node-zero** | Orchestrator; RPC/ZMQ to `zerod` |
+| **insight-ui-zero** | Web UI |
+
+**Deployment:** [insight.zeromachine.io](https://insight.zeromachine.io/) — **mainnet** Zero Insight. Backend `zerod`: `-experimentalfeatures -insightexplorer`; `-reindex` on first index enable.
+
+**Production pin note:** Table in section **1** lists commits from the last surveyed `mynode` install. Reconcile after `npm install` from GitHub.
 
 ---
 
@@ -190,7 +205,7 @@ Org links the GitHub organization home; Insight repos names the specific repos (
 
 | Project (coin) | Org | Insight repos / stack | Stack | Status (verified) |
 |---|---|---|---|---|
-| Zero (ZER) — ours | [zerocurrencycoin](https://github.com/orgs/zerocurrencycoin/repositories) | `bitcore-lib-zero`, `bitcore-node-zero`, `insight-api-zero`, `insight-ui-zero` | Insight fork | Frozen 2021; Node 8.17 (EOL 2019) |
+| Zero (ZER) — ours | [zerocurrencycoin](https://github.com/orgs/zerocurrencycoin/repositories) | `bitcore-lib-zero`, `bitcore-node-zero`, `insight-api-zero`, `insight-ui-zero` | Insight fork | **Active**; mainnet [insight.zeromachine.io](https://insight.zeromachine.io/) |
 | upstream of ours | [ProphetAlgorithms](https://github.com/ProphetAlgorithms) | same four `*-zero` repos | Insight fork | Master frozen May 2021; only a Dependabot side-branch since |
 | Zclassic (ZCL) — our ancestor | [z-classic](https://github.com/z-classic) | `bitcore-lib-zclassic`, `bitcore-node-zclassic`, `insight-api-zclassic`, `insight-ui-zclassic` | Insight fork | Dead since Feb 2018 (pre-Sapling) |
 | Pirate Chain (ARRR) | [PirateNetwork](https://github.com/PirateNetwork) | `bitcore-lib-pirate`, `bitcore-node-pirate`, `insight-api-pirate`, `insight-ui-pirate` | Insight fork | Active; api 2024-10 commit is real tx-parsing work (tx v5) |

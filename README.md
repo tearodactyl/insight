@@ -110,25 +110,3 @@ curl -sL https://insight.zeromachine.io/insight/ | grep -o '<title[^>]*>[^<]*</t
 **Pass criteria:** status template contains **`livenet ? 'mainnet'`**; first static `<title>` is **Zero Insight**; **Warnings** row hidden when **`getinfo.errors`** is empty or a partition-check message (`blocks received in the last`).
 
 Procedure detail: [InsightFix.md §4.3](InsightFix.md) (cache flush), [InsightBlock.md §5.7](InsightBlock.md#57-deploying-updated-explorer-packages) (package **`npm install`** path when pulling from GitHub instead of hot-copy).
-
-### Git commit identity
-
-Insight stack commits should author as **`tearodactyl <tearodactylus@gmail.com>`**.
-
-Scripts live under **`~/Work/ZK/gits/`** (shared across clones, not in this docs repo):
-
-```sh
-# Once per clone (local only, does not change global git config)
-bash ~/Work/ZK/gits/git-author-setup.sh \
-  ~/Work/ZK/ZKs/insight/insight-ui-zero \
-  ~/Work/ZK/ZKs/insight/insight-api-zero \
-  ~/Work/ZK/ZKs/insight/bitcore-node-zero \
-  ~/Work/ZK/ZKs/insight/bitcore-lib-zero \
-  ~/Work/ZK/ZKs/insight
-
-# Optional hook in each code repo
-cp ~/Work/ZK/gits/pre-commit-check-author insight-ui-zero/.git/hooks/pre-commit
-chmod +x insight-ui-zero/.git/hooks/pre-commit
-```
-
-Older pushes under a personal email are unchanged unless history is rewritten (force-push to **`zerocurrencycoin/*`** only if org policy allows it).
