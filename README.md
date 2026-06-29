@@ -32,6 +32,16 @@ The current state of the work: the production crash fixes are deployed (the back
 `.js` hardening plus the "zcashd"→"zerod" banner), and a subsequent round of UI,
 theme, and image tuning has been applied to the front end. Both are covered below.
 
+## Project status
+
+| Item | Status |
+|------|--------|
+| **Public explorer** | [https://insight.zeromachine.io/](https://insight.zeromachine.io/) — **mainnet** Zero Insight |
+| **Stack repos** | `insight-ui-zero`, `insight-api-zero`, `bitcore-lib-zero`, `bitcore-node-zero` |
+| **Node backend** | `zerod` with `-experimentalfeatures`, `-insightexplorer`, `-txindex`; `-reindex` on first index enable |
+| **Indexer scope** | Transparent **t-address** search via daemon addressindex RPCs; shielded z-addrs not indexed chain-wide |
+| **Public docs** | Zero **README**, **BUILD_ZERO**, **ZERO_COIN** (Block explorer sections) |
+
 ## Documentation map
 
 The maintained, definitive documentation set is this `README.md`, the `Insight*.md`
@@ -68,3 +78,51 @@ references, and the two artifact directories [`error/`](error/) and
 
 - The route prefix and why it is `/insight-api-zero`: [InsightBlock.md Appendix B](InsightBlock.md#appendix-b--integrator-api)
 - Endpoints: [InsightBlock.md Appendix B.2](InsightBlock.md#b2-endpoints)
+
+---
+
+## UI round 2 (mainnet polish)
+
+Static HTML/CSS changes in **`insight-ui-zero`** (no **`grunt`** rebuild). Staged copies also under [`samples/`](samples/) for review before promoting into the package repo.
+
+| File | Change |
+| ---- | ------ |
+| `public/index.html` | Mainnet `<title>` and meta **first** (no pre-Angular "Testnet Zero Insight" default). |
+| `public/views/status.html` | **Network** shows **`mainnet`** when API returns **`livenet`**. **Info Errors** binds **`info.errors`** (was **`info.infoErrors`**). |
+
+### Deploy on toru
+
+Connect mode: only **`bitcore`** restarts for backend **`.js`**; these files are **`express.static`** and need **no** `systemctl` restart. Copy into the live tree, then verify through nginx/CDN.
+
+```sh
+# From laptop (paths match toru layout)
+UI=/home/ubuntu/zero/mynode/node_modules/insight-ui-zero/public
+scp insight-ui-zero/public/index.html \
+    insight-ui-zero/public/views/status.html \
+    toru:$UI/
+scp insight-ui-zero/public/views/status.html toru:$UI/views/
+
+# Served-bytes checks (after Cloudflare purge if tab title still stale)
+curl -sL https://insight.zeromachine.io/insight/views/status.html | grep -E 'mainnet|info.errors'
+curl -sL https://insight.zeromachine.io/insight/ | grep -o '<title[^>]*>[^<]*</title>' | head -1
+```
+
+**Pass criteria:** status template contains **`livenet ? 'mainnet'`** (or rendered **mainnet** on `/status` after Angular load); first static `<title>` text is **Zero Insight**, not Testnet; **Info Errors** row populated when **`getinfo.errors`** is non-empty.
+
+Procedure detail: [InsightFix.md §4.3](InsightFix.md) (cache flush), [InsightBlock.md §5.7](InsightBlock.md#57-deploying-updated-explorer-packages) (package **`npm install`** path when pulling from GitHub instead of hot-copy).
+
+### Git commit identity
+
+Insight stack commits should author as **`tearodactyl <tearodactylus@gmail.com>`** (GitHub account tied to the docs repo and maintainer pushes).
+
+```sh
+# Once per clone (local only, does not change global git config)
+bash config/git-author-setup.sh \
+  insight-ui-zero insight-api-zero bitcore-node-zero bitcore-lib-zero .
+
+# Optional hook in each code repo
+cp config/pre-commit-check-author insight-ui-zero/.git/hooks/pre-commit
+chmod +x insight-ui-zero/.git/hooks/pre-commit
+```
+
+Older pushes under a personal email are unchanged unless history is rewritten (force-push to **`zerocurrencycoin/*`** only if org policy requires it).
