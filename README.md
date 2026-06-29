@@ -29,8 +29,11 @@ software engineer. It covers running the explorer, the crashes seen in productio
 and their fixes, the fork's lineage and version walls, and host maintenance.
 
 The current state of the work: the production crash fixes are deployed (the backend
-`.js` hardening plus the "zcashd"→"zerod" banner), and a subsequent round of UI,
-theme, and image tuning has been applied to the front end. Both are covered below.
+`.js` hardening plus the "zcashd"→"zerod" banner), and a UI/theme round (mainnet
+labels, `custom.css`, favicons, status-page polish) is live in production. Staged copies
+under [`samples/`](samples/) match the deployed tree byte-for-byte; see
+[`samples/README.md`](samples/README.md) for the file list and for experiments that
+were reverted (Live banner, `logo.svg`, coloured sync bar, etc.).
 
 ## Project status
 
@@ -54,7 +57,8 @@ references, and the two artifact directories [`error/`](error/) and
 | [InsightBlock.md](InsightBlock.md) | The central reference: what the explorer is, where it lives on disk, and how to operate it — install, launch, shutdown, recovery, the systemd model, log control, nginx. Plus Appendix A (developer internals), Appendix B (integrator API), Appendix C (suggestions, unimplemented). |
 | [InsightFix.md](InsightFix.md) | The four production crash signatures, the `.tail` captures, and the deployed hardening — five backend `.js` files plus the UI "zcashd"→"zerod" banner fix (one template, `translate` directive removed); the fixes are in the package source, with patched reference copies under [`error/`](error/). Includes monitoring, sizing, and message-test procedures. The later UI/theme/image tuning rides on top of these fixes. |
 | [InsightPort.md](InsightPort.md) | Fork lineage, upstream/ecosystem status, component/module versions, upgrade walls, the ecosystem build-toolchain & Node-pinning survey (grunt/bower/gulp, the grunt-rebuild wall), porting and strengthening. |
-| [`error/`](error/) | Patched reference copies of the hardened files: the five backend `.js` files (flat) plus the one UI banner template (`connection.html`) in a path-preserving `insight-ui-zero/public/…` subtree. The fixes ship in the package source; these copies are a convenient catalogued reference. See InsightFix.md. |
+| [`error/`](error/) | Patched reference copies of the hardened backend `.js` files (flat) plus `insight-ui-zero/public/views/includes/connection.html`. `error/currency.js` includes the crash #4 CA fix, CoinGecko User-Agent, and the `binance` JSON alias. See InsightFix.md and [`samples/README.md`](samples/README.md). |
+| [`samples/`](samples/) | Deployed UI mirror: production `insight-ui-zero/public/` files (HTML/CSS/icons). Authoritative list in [`samples/README.md`](samples/README.md). |
 | [`config/`](config/) | The deployed files verbatim: `zerod.service`, `bitcore.service`, `bitcore-node.json` (+`.spawn.bak`), `bitcore_start.sh`, `zero.conf`, `nginx-default`, `journald.conf`, `logrotate-bitcore`. |
 
 ## Start here, by role
@@ -81,32 +85,22 @@ references, and the two artifact directories [`error/`](error/) and
 
 ---
 
-## UI round 2 (mainnet polish)
+## Deployed UI and API (production)
 
-Static HTML/CSS changes in **`insight-ui-zero`** (no **`grunt`** rebuild). Staged copies also under [`samples/`](samples/) for review before promoting into the package repo.
+Full file list, checksums, and reverted experiments: [`samples/README.md`](samples/README.md).
 
-| File | Change |
-| ---- | ------ |
-| `public/index.html` | Mainnet `<title>` and meta **first** (no pre-Angular "Testnet Zero Insight" default). |
-| `public/views/status.html` | **Network** shows **`mainnet`** when API returns **`livenet`**. **Warnings** row (was Info Errors) shows **`info.errors`** only when set and not a partition-check rate message. |
+| Area | Deployed |
+| ---- | -------- |
+| **UI** (`samples/` = production) | Mainnet title/meta, `custom.css`, PNG favicons, About links, mainnet/**Warnings** on status page, hardcoded genesis dates, §4a zerod banner, text **Zero** header, currency factor row |
+| **UI not deployed** | Live green banner, `logo.svg`, traffic-light labels, coloured sync bar, search echo/extra spinner, `/sync` timestamp fields |
+| **API** | `insight-api-zero/lib/currency.js`: crash #4 CA fix, User-Agent, `binance: self.usd` (mirror in `error/currency.js`) |
 
-### Deploy on toru
-
-Connect mode: only **`bitcore`** restarts for backend **`.js`**; these files are **`express.static`** and need **no** `systemctl` restart. Copy into the live tree, then verify through nginx/CDN.
+Static HTML/CSS: copy into `node_modules/insight-ui-zero/public/`, no bitcore restart; purge Cloudflare if stale. Backend `.js`: copy then restart bitcore.
 
 ```sh
-# From laptop (paths match toru layout)
-UI=/home/ubuntu/zero/mynode/node_modules/insight-ui-zero/public
-scp insight-ui-zero/public/index.html \
-    insight-ui-zero/public/views/status.html \
-    toru:$UI/
-scp insight-ui-zero/public/views/status.html toru:$UI/views/
-
-# Served-bytes checks (after Cloudflare purge if tab title still stale)
-curl -sL https://insight.zeromachine.io/insight/views/status.html | grep -E 'mainnet|info.errors'
-curl -sL https://insight.zeromachine.io/insight/ | grep -o '<title[^>]*>[^<]*</title>' | head -1
+# Served-bytes spot checks
+curl -sL https://insight.zeromachine.io/insight/views/status.html | grep -E 'mainnet|blocks received in the last'
+curl -sL https://insight.zeromachine.io/insight-api-zero/currency | python3 -m json.tool | grep binance
 ```
 
-**Pass criteria:** status template contains **`livenet ? 'mainnet'`**; first static `<title>` is **Zero Insight**; **Warnings** row hidden when **`getinfo.errors`** is empty or a partition-check message (`blocks received in the last`).
-
-Procedure detail: [InsightFix.md §4.3](InsightFix.md) (cache flush), [InsightBlock.md §5.7](InsightBlock.md#57-deploying-updated-explorer-packages) (package **`npm install`** path when pulling from GitHub instead of hot-copy).
+Procedure: [InsightFix.md](InsightFix.md) (§4a banner, cache flush), [InsightBlock.md §5.7](InsightBlock.md#57-deploying-updated-explorer-packages) (package update path).

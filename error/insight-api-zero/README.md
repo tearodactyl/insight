@@ -415,6 +415,10 @@ Where "xxx" can be:
   /insight-api-zero/currency
 ```
 
+JSON `data` fields: `usd`, `btc`, and `binance` (alias of `usd` for the compiled UI,
+which still reads `res.data.binance`). Outbound CoinGecko requests use a User-Agent
+header; see `error/currency.js` and InsightFix.md §2.3.
+
 ### Current Supply
 ```
   /insight-api-zero/supply

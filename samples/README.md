@@ -1,181 +1,183 @@
-samples/ — no-rebuild UI/UX experiments
-=======================================
+samples/ — deployed UI mirror (production)
+==========================================
 
-Staged copies of five raw-served `insight-ui-zero` templates, each carrying one
-or more small UX experiments. Every change is **HTML-only**: it uses Bootstrap
-classes and image assets **already present in the shipped bundle**, adds **no new
-`angular-gettext` keys**, and therefore needs **no `grunt` rebuild and no
-redeploy** — `public/views/*.html` are served raw via Angular's `$templateCache`/
-`ng-include`.
+Byte-for-byte copies of the **production** `insight-ui-zero/public/` tree
+(`<bitcore-node>/node_modules/insight-ui-zero/public/`), including the full
+`img/icons/` directory referenced by `index.html` and `main.min.css`.
+The nested `insight-ui-zero/` package repo in this docs checkout is kept in sync
+with `samples/` for the same paths.
 
-These files live in this **repo-root `samples/` directory** (outside the
-`insight-ui-zero` node-module repo), under `samples/views/...` — mirroring their
-real paths under `insight-ui-zero/public/views/...`. They are **for review only**
-here; promote a file by copying it over its live counterpart (see *Promote /
-rollback* below).
+Every file here is **HTML/CSS/assets only**: Bootstrap classes and images already in
+the shipped bundle, no new `angular-gettext` keys, **no `grunt` rebuild** --
+`public/views/*.html` are served raw via Angular `$templateCache` / `ng-include`.
 
-Nothing under the docs repo's `error/` tree is touched — those mirror deployed
-artifacts. Theme is **function-only semantic color** (green = ok, amber =
-working, red = down); this is not a rebrand.
+Backend companion: `error/currency.js` mirrors production
+`insight-api-zero/lib/currency.js` (same content as
+`insight-api-zero/lib/currency.js` in the nested package repo).
 
-Scope names used are all confirmed present in `js/main.min.js` / the controllers:
-`apiOnline`, `serverOnline`, `clienteOnline`, `sync.status`, `sync.error`,
-`sync.startTs`, `sync.syncPercentage`, `info.connections`, `q`, `badQuery`,
-`loading`, `currency.factor`, `currency.symbol`.
+File inventory
+--------------
+
+Paths mirror `insight-ui-zero/public/...`:
+
+| Path under `samples/` | Role |
+|---|---|
+| `index.html` | Mainnet title/meta, PNG favicon links, `custom.css` link |
+| `css/custom.css` | Ice-blue light theme override |
+| `views/index.html` | About panel with repo links |
+| `views/status.html` | Mainnet label, Warnings filter, hardcoded genesis dates, blue progress bar |
+| `views/includes/connection.html` | Red failure banner only; zerod wording (§4a) |
+| `views/includes/header.html` | Text brand **Zero**; plain Conn count; sync tooltip |
+| `views/includes/search.html` | Upstream search form (no extra spinner or query echo) |
+| `views/includes/currency.html` | Price-feed visibility row (`factor:` / `no price feed`) |
+| `img/icons/favicon.ico` | Legacy tab icon; `index.html` `shortcut icon` link (upstream; kept alongside PNGs) |
+| `img/icons/favicon-16x16.png` | Sized PNG favicon (Fixes round; modern browsers) |
+| `img/icons/favicon-32x32.png` | Sized PNG favicon (Fixes round; modern browsers) |
+| `img/icons/copy.png` | Upstream UI sprite for `.btn-copy` in `main.min.css` (not a favicon; same folder on the server) |
+
+Deployed changes (production and this tree)
+-------------------------------------------
+
+### Round 2 (mainnet polish)
+
+- **`index.html`**: static `<title>` and meta say **Zero Insight** (mainnet), not testnet default.
+- **`views/status.html`**: **Network** shows `mainnet` when API returns `livenet`.
+- **`views/status.html`**: **Warnings** row binds `info.errors` but hides partition-check
+  noise (`blocks received in the last`). Other warnings still show when present.
+
+### Theme and favicons
+
+- **`css/custom.css`**: additive override after `main.min.css` (page grey-blue, white
+  panels, navbar hover-invert, unified green status/search boxes, link colours,
+  currency dropdown active state). See *CSS theme* below.
+- **`index.html`**: extra `<link>` for `custom.css`; PNG favicon links added beside the
+  existing `.ico` `shortcut icon` link.
+- **`img/icons/`**: mirror includes upstream `favicon.ico` and `copy.png` (copy-button
+  sprite) plus the two PNG favicons added in the Fixes round -- promote the whole
+  directory, not the PNGs alone.
+- **`views/index.html`**: About copy with links to `insight-ui-zero`, `Zero`, issues.
+
+### Status page dates and sync display
+
+- **Start Date** and **Genesis Mined**: hardcoded Zero genesis timestamps (ProphetAlgorithms,
+  2021). Do **not** bind `{{sync.startTs}}` -- `/sync` does not return it (indexes
+  live in zerod; see `error/insight-api-zero/README.md`).
+- **Finish Date** row: removed (`sync.endTs` never returned).
+- **Sync progress bar**: stock `progress-bar-info` (blue), not state-coloured bars.
+- **Navbar sync tooltip**: `syncPercentage` and `blockChainHeight` only (no
+  `syncedBlocks` / `skippedBlocks`).
+
+### Connection banner (§4a)
+
+- **`connection.html`**: `!apiOnline` text reads "Can't connect to zerod to get live
+  updates"; `translate` removed on that `<p>`. **No** green "Live" success banner.
+
+### Header and search
+
+- **`header.html`**: text brand **Zero** (not `logo.svg`). Plain connection count
+  (no traffic-light labels or sync-status chip).
+- **`search.html`**: upstream only. Upstream CSS still shows `loading.gif` **inside**
+  the input while a search runs; there is no duplicate GIF beside the box.
+
+### Currency dropdown and API
+
+- **`currency.html`**: footer row shows `factor: {{currency.factor}}` when the feed
+  works, or red `no price feed` when absent. Native ZER shows `factor: 1`.
+- **`insight-api-zero/lib/currency.js`**: crash #4 CA fix plus CoinGecko **User-Agent**
+  header and **`binance: self.usd`** in the JSON (UI `main.min.js` still reads
+  `res.data.binance`).
+
+Not deployed (rejected experiments -- do not promote)
+-----------------------------------------------------
+
+These appeared in a short-lived Fixes commit (2026-06-27) and were **reverted in production**:
+
+- Green **Live** `alert-success` box in `connection.html`
+- **`logo.svg`** navbar brand (2014 BitPay wordmark; unusable at navbar height)
+- Traffic-light **label** chips on Conn count and `sync.status`
+- State-coloured sync **progress bar** (green/amber/red)
+- **`{{sync.startTs}}`** Start Date binding (empty cell -- API has no field)
+- **Finish Date** row (`sync.endTs`)
+- **`syncedBlocks` / `skippedBlocks`** navbar tooltip
+- Search **query echo** (`&rarr; {{q}}` under the box)
+- Extra **`loading.gif` `<img>`** beside the search input
+
+`/sync` API fields
+------------------
+
+Today's `/insight-api-zero/sync` JSON:
+
+`status`, `blockChainHeight`, `syncPercentage`, `height`, `error`, `type`
+
+Legacy Insight fields **`startTs`**, **`endTs`**, **`syncedBlocks`** are not returned
+on Zero (Safecoin/Pirate forks match this shape). Do not bind them in templates.
 
 How image paths resolve
 -----------------------
 
-`public/index.html` sets `<base href="/" />`, so **every relative URL resolves
-against the site root** (`https://<host>/…`). The UI is **not** served from the
-site root, though: nginx `proxy_pass`es to bitcore (`http://127.0.0.1:3001/`),
-which mounts the whole UI under **`/insight/`** (verified: origin
-`/insight/css/custom.css` → 200, bare `/css/custom.css` → 404). A relative asset
-URL therefore only resolves because the page itself is loaded under `/insight/`
-and the browser requests it relative to that document. Reference an image by its
-path **relative to the current page**, with **no leading slash** — a leading
-slash escapes the `/insight/` mount and 404s:
+`index.html` sets `<base href="/" />`. nginx proxies to bitcore on port 3001; the UI
+mount is **`/insight/`**. Use paths **relative to the page**, no leading slash:
 
 ```html
-<img data-ng-src="img/logo.svg" alt="Zero">   <!-- correct: relative, stays under /insight/ -->
-<img src="/img/logo.svg">                       <!-- WRONG: site root, escapes the /insight/ mount -> 404 -->
-<img src="../img/logo.svg">                      <!-- WRONG: base href="/" makes ../ meaningless -->
+<link rel="icon" href="img/icons/favicon-32x32.png">   <!-- correct under /insight/ -->
+<link rel="icon" href="/img/icons/favicon-32x32.png">  <!-- WRONG: escapes mount -> 404 -->
 ```
 
-Use `data-ng-src` (not `src`) when the element is inside an Angular scope, to
-avoid a one-frame request for the literal un-interpolated URL. Assets referenced
-here (`img/logo.svg`, `img/loading.gif`) already ship in `public/img/`.
+Use `data-ng-src` (not `src`) for Angular-bound images.
 
-> In `samples/views/` the `img/...` paths are illustrative (this subtree is not a
-> served URL). They resolve correctly once a file is promoted into the live
-> `public/views/` tree, because of `<base href="/">`.
+The CSS theme -- `css/custom.css`
+---------------------------------
 
-The experiments
----------------
+Single additive stylesheet layered **after** `css/main.min.css`. No LESS, no grunt.
+Rollback: remove the `<link>` from `index.html`.
 
-### 1 — `views/includes/connection.html` — positive heartbeat
-The shipped template only renders the **failure** side (red `alert-danger`), so a
-healthy node shows nothing. Adds a symmetric green `alert-success` "Live" box,
-shown when `apiOnline && serverOnline && clienteOnline`.
-**Verifies:** the websocket/`apiOnline` flag actually flips *true* (today only the
-down state is ever visible).
+What it overrides (each rule needed because base differs):
 
-### 2 — `views/includes/header.html` — brand image + traffic-light status
-- **Image:** replaces the text brand `Zero` with `img/logo.svg` (`data-ng-src`).
-- **Traffic-light:** `info.connections` rendered as a green/red Bootstrap `label`
-  (green when peers > 0).
-- **Status chip:** raw `sync.status` as a semantic `label` — green `finished`,
-  amber `syncing`, red on `sync.error`.
-**Verifies:** `getSync()` is polling and transitioning live from *any* page, not
-just `/status`; peer connectivity at a glance.
+- **Page surface** -- `body` `#eef1f4` (`!important` vs base `#fff`).
+- **Panels** -- `.well` / `.col-gray` forced white; hairlines `#dbe4ec`.
+- **Navbar** -- white-on-black at rest, inverts on hover; no `.active` styling
+  (bundled `ui-route` never applies `.active`).
+- **Search + status boxes** -- both `#597338` (base search box was brighter green).
+- **Links** -- `#1a5e9c` / hover `#0f3f6e`.
+- **Currency dropdown** -- `a.active` highlight (base targets `li.active`).
 
-### 3 — `views/status.html` — live Start Date + colored progress bar
-- **Start Date:** was a hardcoded `Feb 19, 2017 10:26:40 AM UTC` literal with the
-  real value hidden in the `title=` tooltip; now binds live `sync.startTs`.
-- **Progress bar:** tinted by state (`progress-bar-success`/`-warning`/`-danger`)
-  instead of the static `progress-bar-info`.
-**Verifies:** the API actually delivers `startTs` (a stale literal was masking it).
+Scope names (confirmed in `js/main.min.js`)
+-------------------------------------------
 
-### 4 — `views/includes/search.html` — query echo + spinner
-- **Echo:** live `&rarr; {{q}}` under the box.
-- **Image:** `img/loading.gif` spinner shown while `loading`.
-**Verifies:** two-way binding fires before submit; `badQuery` toggles correctly
-against known-good vs known-bad input.
+`apiOnline`, `serverOnline`, `clienteOnline`, `sync.status`, `sync.error`,
+`sync.syncPercentage`, `sync.blockChainHeight`, `info.connections`, `info.errors`,
+`currency.factor`, `q`, `badQuery`, `loading`.
 
-### 5 — `views/includes/currency.html` — price-feed visibility
-Adds a factor row to the currency dropdown: muted grey `factor: {{currency.factor}}`
-when live, red `⚠ no price feed` when the factor is `0`/absent.
-**Verifies operationally:** a `0` factor is the **visible signature of the Crash #4
-expired-CA fallback** (`currency.js` sets `usd`/`btc` = 0 when the price fetch
-fails) — observable without log-diving.
+Verification checksums (production deploy, 2026-06-29)
+----------------------------------------------
 
-The CSS theme — `css/custom.css`
---------------------------------
-
-A single **additive** override stylesheet, layered AFTER `css/main.min.css` via
-one extra `<link>` in the sampled `index.html`. It re-tints **existing**
-selectors only — touches no LESS source, needs no `grunt` rebuild, and rolls back
-by removing the `<link>`. The base bundle is light, so this is a deliberately
-**light** theme that works WITH the cascade rather than a dark inversion.
-
-Each rule is an override that is **necessary because the base differs** — nothing
-that merely restates what `main.min.css` already does. What it changes:
-
-- **Page surface** — `body` background set to `#eef1f4`, a faint cool grey-blue,
-  against the pure-white (`#ffffff`) panels. Needs `!important`: `main.min.css` has
-  `body{background-color:#fff}` at the same specificity, so without it the override
-  silently no-ops.
-- **Panels/tables lifted to white** — base paints `.well`/`.col-gray` grey
-  (`#f5f5f5`/`#F4F4F4`), which blends into the ice-blue page; they're forced to
-  white (`#ffffff`) so panels read as distinct surfaces. Hairlines tinted
-  blue-grey (`#dbe4ec`).
-- **Navbar = plain buttons, hover-invert** — white text on the black bar at rest,
-  inverting to black-on-white on hover/focus, back on leave; every item identical
-  (no persistent "selected" state). The override sets **both** background and color
-  with `!important` because the base bundle stacks two conflicting half-rules on
-  hover (Bootstrap's `background:transparent` vs the Zero black-theme's
-  `background:#fff` with color unset), so the result is otherwise order-dependent
-  and lands dark/invisible. There is intentionally no `.active` styling — the
-  bundled `ui-route` directive never applies `.active` (its `^link$` regex never
-  matches the `/link` path), so a selected-state rule would style a class that is
-  never in the DOM.
-- **The two top green boxes unified** — base gives the search input
-  (`.navbar-form .form-control`/`#search`) a bright `#7CAD23` yellow-green while
-  the conn/status box (`.status`) is `#597338` olive. The search box is forced to
-  the same `#597338` so both boxes match. `!important` is required because the base
-  search rule outranks a bare `#search`. (Base already sets the search text white
-  and a readable placeholder, so those are left to base.)
-- **Links** are deep blue (`#1a5e9c`, darker `#0f3f6e` on hover).
-- **Selected currency in the dropdown** — base highlights `.dropdown>.active>a`
-  (class on the `<li>`), but the currency markup puts `.active` on the `<a>`, so
-  base's highlight does not apply; the override adds a faint blue wash
-  (`rgba(26,94,156,.08)`) + blue text on `a.active` so the chosen currency is
-  visibly marked.
-
-The "About" panel copy in `views/index.html` was also rewritten with clickable
-links: **open-source** → the `insight-ui-zero` repo, **Zero Currency** → the
-`Zero` repo, and **Github Issue tracker** → the issues page. The "About" heading
-is kept.
-
-Bundle classes / assets relied on (all confirmed present)
----------------------------------------------------------
-
-`alert-success`, `label`, `label-success`, `label-danger`, `label-warning`,
-`progress-bar-success`, `progress-bar-warning`, `progress-bar-danger`,
-`glyphicon-ok`, `glyphicon-warning-sign`, `text-muted`, `text-danger`, the
-`divider` dropdown class — plus `img/logo.svg` and `img/loading.gif`.
-
-Note on diffs
--------------
-
-The staged copies also normalized a handful of pre-existing **trailing-whitespace**
-lines (cosmetic, unrelated to the experiments). When reviewing a `diff -u` against
-the live original, those whitespace-only hunks are noise; the substantive changes
-are the commented `SAMPLE` blocks.
+```text
+connection.html   ae74ae7aee362fc85a0535106eb3705b
+currency.js       49ae99a2e1fa196acde9bc83e7bae81f
+```
 
 Promote / rollback
 ------------------
 
-Preview one file's substantive diff (run from the repo root):
+Preview diff (from docs repo root):
 
 ```sh
-diff -u insight-ui-zero/public/views/includes/header.html \
-        samples/views/includes/header.html
+diff -u insight-ui-zero/public/views/status.html samples/views/status.html
 ```
 
-Promote a sample into the live raw-served tree (back up first). Back up with a
-**timestamped** suffix `.YYYYMMDD-HHMMSS` (host-local clock), NOT a bare `.bak` —
-unique suffixes never collide, sort chronologically, and record when each backup
-was taken:
+Promote one UI file to the production host (back up with timestamp suffix first).
+Host-specific deploy steps (ssh alias, cache purge): maintainers' internal runbook only
+— not linked from distributable docs. Generic package-update path:
+[InsightBlock.md §5.7](../InsightBlock.md#57-deploying-updated-explorer-packages).
+Static cache flush: [InsightFix.md](../InsightFix.md#flushing-caches-after-a-static-deploy).
 
 ```sh
-LIVE=insight-ui-zero/public/views
-ts=$(date +%Y%m%d-%H%M%S)                                          # one ts per batch
-cp -p "$LIVE/includes/header.html" "$LIVE/includes/header.html.$ts"  # rollback copy
-cp samples/views/includes/header.html "$LIVE/includes/header.html"
+LIVE=<bitcore-node>/node_modules/insight-ui-zero/public
+ts=$(date +%Y%m%d-%H%M%S)
+cp -p "$LIVE/views/status.html" "$LIVE/views/status.html.$ts"
+cp samples/views/status.html "$LIVE/views/status.html"
 ```
 
-No build step, no `bitcore` restart — these are `express.static` files. The edit is
-live once the caches in front are flushed; see
-[InsightFix.md](../InsightFix.md#flushing-caches-after-a-static-deploy). Roll back by
-copying the timestamped backup back over the original.
+API `currency.js` needs a **bitcore restart** after copy. Static HTML/CSS needs **no**
+restart; purge Cloudflare if the edge serves stale bytes. See
+[InsightFix.md](../InsightFix.md#flushing-caches-after-a-static-deploy).

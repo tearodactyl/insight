@@ -23,15 +23,15 @@ the catalogued/staged copies; the right-hand column is where each lands.
 | `bitcore-node-zero` | `lib/services/bitcoind.js` | #1 rawtx door, #2 fd-leak/backoff | `error/bitcoind.js` |
 | `insight-api-zero` | `lib/index.js` | #1 inv door | `error/index.js` |
 | `insight-api-zero` | `lib/addresses.js` | #3 OOM cap | `error/addresses.js` |
-| `insight-api-zero` | `lib/currency.js` | #4 expired-cert price feed | `error/currency.js` |
-| `insight-ui-zero` | `public/views/includes/connection.html` | §4a banner text + positive-heartbeat box | `error/insight-ui-zero/public/views/includes/connection.html`, `samples/views/includes/connection.html` |
+| `insight-api-zero` | `lib/currency.js` | #4 cert fix + CoinGecko User-Agent + `binance` alias | `error/currency.js` |
+| `insight-ui-zero` | `public/views/includes/connection.html` | §4a zerod banner text only (no Live box) | `error/insight-ui-zero/public/views/includes/connection.html`, `samples/views/includes/connection.html` |
 | `insight-ui-zero` | `public/css/custom.css` | ice-blue light theme (new file) | `samples/css/custom.css` |
 | `insight-ui-zero` | `public/index.html` | sized-PNG favicon links + `custom.css` `<link>` | `samples/index.html` |
-| `insight-ui-zero` | `public/views/status.html` | live Start Date + colored progress bar | `samples/views/status.html` |
+| `insight-ui-zero` | `public/views/status.html` | mainnet label, Warnings filter, hardcoded genesis dates | `samples/views/status.html` |
 | `insight-ui-zero` | `public/views/index.html` | About-panel copy with links | `samples/views/index.html` |
-| `insight-ui-zero` | `public/views/includes/header.html` | brand image + traffic-light status | `samples/views/includes/header.html` |
+| `insight-ui-zero` | `public/views/includes/header.html` | text Zero brand, plain Conn, sync tooltip | `samples/views/includes/header.html` |
 | `insight-ui-zero` | `public/views/includes/currency.html` | price-feed-visibility row | `samples/views/includes/currency.html` |
-| `insight-ui-zero` | `public/views/includes/search.html` | query echo + spinner | `samples/views/includes/search.html` |
+| `insight-ui-zero` | `public/views/includes/search.html` | upstream (Fixes spinner/echo reverted) | `samples/views/includes/search.html` |
 | `insight-ui-zero` | `public/img/icons/favicon-16x16.png` | sized PNG favicon (new file) | `samples/img/icons/favicon-16x16.png` |
 | `insight-ui-zero` | `public/img/icons/favicon-32x32.png` | sized PNG favicon (new file) | `samples/img/icons/favicon-32x32.png` |
 
@@ -283,12 +283,17 @@ expired 2020-05-30), so TLS is rejected locally.
     return null;
   })();
   function requestOpts(url) {
-    var opts = { url: url, timeout: 15000 };
+    var opts = { url: url, timeout: 15000, headers: { 'User-Agent': 'ZeroInsight/1.0 (insight-api-zero)' } };
     if (SYSTEM_CA) { opts.ca = SYSTEM_CA; }
     return opts;
   }
   ```
 
+- **CoinGecko User-Agent:** CoinGecko returns HTTP 403 without a User-Agent on some
+  hosts; the header above is set on every outbound price request.
+- **`binance` alias:** the compiled UI still reads `res.data.binance` for USD
+  conversion; the handler adds `binance: self.usd` beside `usd` and `btc` in the
+  JSON (legacy field name, not a Binance feed).
 - **`error` → `warn`:** a feed failure is expected, recoverable degraded input —
   log `warn` and serve last-known rates, instead of `log.error(err)` every 10 min
   (and the old `console.log(ee)` on parse failure becomes `log.warn`).
@@ -459,7 +464,7 @@ not in play and needs no edit or rebuild.
 
 | File | Change | Bytes |
 |---|---|---|
-| `views/includes/connection.html` | `!apiOnline` `<p>`: text → "Can't connect to zerod to get live updates", `translate` removed | 711 → 626 |
+| `views/includes/connection.html` | `!apiOnline` `<p>`: text → "Can't connect to zerod to get live updates", `translate` removed; no green Live box | md5 `ae74ae7aee362fc85a0535106eb3705b` |
 
 **Serving.** Static template — no service restart. Served under the `/insight/` prefix
 (`/insight/views/includes/connection.html`); fetched live, so a browser Shift-reload
@@ -496,10 +501,11 @@ healthy, so verification is done by **forcing the banner** without disturbing ze
    curl -sL https://insight.zeromachine.io/insight/views/includes/connection.html | md5sum
    ```
 
-   Expected: connection.html `58094a9afafd6d9dfed2d3c71493caf8` (matches
-   `insight-ui-zero/public/views/includes/connection.html`). Also confirm the
-   served template carries no `translate` attribute on the `!apiOnline` `<p>` and no
-   "zcashd".
+   Expected: connection.html `ae74ae7aee362fc85a0535106eb3705b` (matches
+   `insight-ui-zero/public/views/includes/connection.html` and
+   `samples/views/includes/connection.html`). Also confirm the served template
+   carries no `translate` attribute on the `!apiOnline` `<p>`, no "zcashd", and no
+   green `alert-success` Live box.
 
 ### Flushing caches after a static deploy
 

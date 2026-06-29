@@ -69,3 +69,9 @@ rebuild.
 Code released under the MIT license.
 
 Copyright 2013-2015 BitPay, Inc.
+
+## Deployed template note
+
+Production `public/views/includes/connection.html` matches
+`samples/views/includes/connection.html`: §4a zerod banner text only (no green Live
+box). See [`samples/README.md`](../../samples/README.md) and InsightFix.md §4a.
