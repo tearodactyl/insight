@@ -88,7 +88,7 @@ Static HTML/CSS changes in **`insight-ui-zero`** (no **`grunt`** rebuild). Stage
 | File | Change |
 | ---- | ------ |
 | `public/index.html` | Mainnet `<title>` and meta **first** (no pre-Angular "Testnet Zero Insight" default). |
-| `public/views/status.html` | **Network** shows **`mainnet`** when API returns **`livenet`**. **Info Errors** binds **`info.errors`** (was **`info.infoErrors`**). |
+| `public/views/status.html` | **Network** shows **`mainnet`** when API returns **`livenet`**. **Warnings** row (was Info Errors) shows **`info.errors`** only when set and not a partition-check rate message. |
 
 ### Deploy on toru
 
@@ -107,22 +107,28 @@ curl -sL https://insight.zeromachine.io/insight/views/status.html | grep -E 'mai
 curl -sL https://insight.zeromachine.io/insight/ | grep -o '<title[^>]*>[^<]*</title>' | head -1
 ```
 
-**Pass criteria:** status template contains **`livenet ? 'mainnet'`** (or rendered **mainnet** on `/status` after Angular load); first static `<title>` text is **Zero Insight**, not Testnet; **Info Errors** row populated when **`getinfo.errors`** is non-empty.
+**Pass criteria:** status template contains **`livenet ? 'mainnet'`**; first static `<title>` is **Zero Insight**; **Warnings** row hidden when **`getinfo.errors`** is empty or a partition-check message (`blocks received in the last`).
 
 Procedure detail: [InsightFix.md §4.3](InsightFix.md) (cache flush), [InsightBlock.md §5.7](InsightBlock.md#57-deploying-updated-explorer-packages) (package **`npm install`** path when pulling from GitHub instead of hot-copy).
 
 ### Git commit identity
 
-Insight stack commits should author as **`tearodactyl <tearodactylus@gmail.com>`** (GitHub account tied to the docs repo and maintainer pushes).
+Insight stack commits should author as **`tearodactyl <tearodactylus@gmail.com>`**.
+
+Scripts live under **`~/Work/ZK/gits/`** (shared across clones, not in this docs repo):
 
 ```sh
 # Once per clone (local only, does not change global git config)
-bash config/git-author-setup.sh \
-  insight-ui-zero insight-api-zero bitcore-node-zero bitcore-lib-zero .
+bash ~/Work/ZK/gits/git-author-setup.sh \
+  ~/Work/ZK/ZKs/insight/insight-ui-zero \
+  ~/Work/ZK/ZKs/insight/insight-api-zero \
+  ~/Work/ZK/ZKs/insight/bitcore-node-zero \
+  ~/Work/ZK/ZKs/insight/bitcore-lib-zero \
+  ~/Work/ZK/ZKs/insight
 
 # Optional hook in each code repo
-cp config/pre-commit-check-author insight-ui-zero/.git/hooks/pre-commit
+cp ~/Work/ZK/gits/pre-commit-check-author insight-ui-zero/.git/hooks/pre-commit
 chmod +x insight-ui-zero/.git/hooks/pre-commit
 ```
 
-Older pushes under a personal email are unchanged unless history is rewritten (force-push to **`zerocurrencycoin/*`** only if org policy requires it).
+Older pushes under a personal email are unchanged unless history is rewritten (force-push to **`zerocurrencycoin/*`** only if org policy allows it).
