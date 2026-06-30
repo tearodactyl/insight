@@ -4,41 +4,38 @@ This document is the operational record of how the Zero Insight explorer
 (`bitcore` process, Node v8.17.0) crashes in production, what each crash's log
 signature looks like, and the fix in place for it. Each entry gives the signature,
 when the bug was introduced and how often it fires, the root cause, and the *shape*
-of the current fix with short snippets, pointing at the source file and line. The
-fixes are in the code — a fresh `npm install` of the Zero `bitcore`/`insight`
-packages carries them; no manual file surgery is needed.
+of the current fix with short snippets, pointing at the source file and line. Backend
+fixes ship in the four `zerocurrencycoin/*-zero` package repositories; reference
+copies under [`error/`](error/) and [`samples/`](samples/) are catalogued in the
+[documentation map](README.md#documentation-map).
 
 ## Changed-file manifest
 
 Every file this document's fixes and UI changes touch, with its path **relative to
-the root of its package repo** (the four explorer repos live side by side under the
-docs root). The backend hardening files are deployed into the package source; the
-UI files are promoted from the repo-root `samples/` staging tree (see
-[`samples/README.md`](samples/README.md)). Paths under `error/` and `samples/` are
-the catalogued/staged copies; the right-hand column is where each lands.
+the root of its package repo**. Reference copies under `error/` and `samples/` are
+listed in the right-hand column where they exist.
 
-| Repo | Path relative to repo root | What | Staged/reference copy |
+| Repo | Path relative to repo root | What | Reference copy |
 |---|---|---|---|
 | `bitcore-lib-zero` | `lib/transaction/transaction.js` | #1 diagnostic context | `error/transaction.js` |
 | `bitcore-node-zero` | `lib/services/bitcoind.js` | #1 rawtx door, #2 fd-leak/backoff | `error/bitcoind.js` |
 | `insight-api-zero` | `lib/index.js` | #1 inv door | `error/index.js` |
 | `insight-api-zero` | `lib/addresses.js` | #3 OOM cap | `error/addresses.js` |
-| `insight-api-zero` | `lib/currency.js` | #4 cert fix + CoinGecko User-Agent + `binance` alias | `error/currency.js` |
-| `insight-ui-zero` | `public/views/includes/connection.html` | §4a zerod banner text only (no Live box) | `error/insight-ui-zero/public/views/includes/connection.html`, `samples/views/includes/connection.html` |
+| `insight-api-zero` | `lib/currency.js` | #4 TLS CA trust + price-feed JSON shape | `error/currency.js` |
+| `insight-ui-zero` | `public/views/includes/connection.html` | §4a zerod offline banner | `error/insight-ui-zero/public/views/includes/connection.html`, `samples/views/includes/connection.html` |
 | `insight-ui-zero` | `public/css/custom.css` | ice-blue light theme (new file) | `samples/css/custom.css` |
 | `insight-ui-zero` | `public/index.html` | sized-PNG favicon links + `custom.css` `<link>` | `samples/index.html` |
 | `insight-ui-zero` | `public/views/status.html` | mainnet label, Warnings filter, hardcoded genesis dates | `samples/views/status.html` |
 | `insight-ui-zero` | `public/views/index.html` | About-panel copy with links | `samples/views/index.html` |
 | `insight-ui-zero` | `public/views/includes/header.html` | text Zero brand, plain Conn, sync tooltip | `samples/views/includes/header.html` |
-| `insight-ui-zero` | `public/views/includes/currency.html` | price-feed-visibility row | `samples/views/includes/currency.html` |
-| `insight-ui-zero` | `public/views/includes/search.html` | upstream (Fixes spinner/echo reverted) | `samples/views/includes/search.html` |
+| `insight-ui-zero` | `public/views/includes/currency.html` | currency dropdown footer row | `samples/views/includes/currency.html` |
+| `insight-ui-zero` | `public/views/includes/search.html` | search form | `samples/views/includes/search.html` |
 | `insight-ui-zero` | `public/img/icons/favicon-16x16.png` | sized PNG favicon (new file) | `samples/img/icons/favicon-16x16.png` |
 | `insight-ui-zero` | `public/img/icons/favicon-32x32.png` | sized PNG favicon (new file) | `samples/img/icons/favicon-32x32.png` |
 
-The five backend files are pure source hardening and ship via a package update
-(§2); the ten UI files are HTML/CSS/asset-only and need no `grunt` rebuild — they
-are promoted by copying over the live `public/...` tree (§4a,
-[`samples/README.md`](samples/README.md)).
+The five backend files are source hardening in the API and node packages. The UI
+entries are HTML/CSS/assets only — no `main.min.js` changes; see
+[InsightPort.md §6.3](InsightPort.md#63-did-horizens-changes-require-a-gruntbower-rebuild-yes--verified).
 
 ---
 
@@ -289,11 +286,11 @@ expired 2020-05-30), so TLS is rejected locally.
   }
   ```
 
-- **CoinGecko User-Agent:** CoinGecko returns HTTP 403 without a User-Agent on some
-  hosts; the header above is set on every outbound price request.
-- **`binance` alias:** the compiled UI still reads `res.data.binance` for USD
-  conversion; the handler adds `binance: self.usd` beside `usd` and `btc` in the
-  JSON (legacy field name, not a Binance feed).
+- **CoinGecko requests:** `requestOpts` sets outbound headers and passes the OS CA
+  bundle when available (see snippet above).
+- **`binance` alias:** the compiled UI reads `res.data.binance` for USD conversion;
+  the handler adds `binance: self.usd` beside `usd` and `btc` in the JSON (legacy
+  field name, not a Binance feed).
 - **`error` → `warn`:** a feed failure is expected, recoverable degraded input —
   log `warn` and serve last-known rates, instead of `log.error(err)` every 10 min
   (and the old `console.log(ee)` on parse failure becomes `log.warn`).
@@ -462,9 +459,9 @@ and edits the text — the `<p>` renders its literal English in every locale. Th
 touches only `connection.html`; the catalog (`translations.js` / `main.min.js`) is
 not in play and needs no edit or rebuild.
 
-| File | Change | Bytes |
-|---|---|---|
-| `views/includes/connection.html` | `!apiOnline` `<p>`: text → "Can't connect to zerod to get live updates", `translate` removed; no green Live box | md5 `ae74ae7aee362fc85a0535106eb3705b` |
+| File | Change |
+|---|---|
+| `views/includes/connection.html` | `!apiOnline` `<p>`: text → "Can't connect to zerod to get live updates", `translate` removed |
 
 **Serving.** Static template — no service restart. Served under the `/insight/` prefix
 (`/insight/views/includes/connection.html`); fetched live, so a browser Shift-reload
@@ -493,19 +490,10 @@ healthy, so verification is done by **forcing the banner** without disturbing ze
    every language. `setLanguage` clears `$templateCache` and `$route.reload()`, so no
    manual refresh is needed.
 
-3. **Served-bytes check (deploy proof).** Confirm the public site serves the edited
-   template, not a stale copy, by md5-matching served ↔ local at the `/insight/`
-   prefix:
-
-   ```sh
-   curl -sL https://insight.zeromachine.io/insight/views/includes/connection.html | md5sum
-   ```
-
-   Expected: connection.html `ae74ae7aee362fc85a0535106eb3705b` (matches
-   `insight-ui-zero/public/views/includes/connection.html` and
-   `samples/views/includes/connection.html`). Also confirm the served template
-   carries no `translate` attribute on the `!apiOnline` `<p>`, no "zcashd", and no
-   green `alert-success` Live box.
+3. **Served template check.** Fetch the public template at the `/insight/` prefix
+   and diff against `samples/views/includes/connection.html` (or the package repo
+   copy). Confirm the `!apiOnline` `<p>` has no `translate` attribute and reads
+   "zerod", not "zcashd".
 
 ### Flushing caches after a static deploy
 
@@ -518,10 +506,9 @@ startup, so a `bitcore` restart — `systemctl restart bitcore.service` if runni
 systemd — **is** required for the change to take effect, and no cache-flush is
 involved.)
 
-For a static asset, a served-bytes check (above) that still returns the old md5 after
-the file on disk has changed means a cache layer in front is serving a stale copy.
-Flush each caching layer the request passes through, front to back, then hard-reload
-the browser; the served-bytes check should then match the on-disk file.
+For a static asset, if the browser or edge still shows old content after the on-disk
+file has changed, flush each caching layer the request passes through, front to back,
+then hard-reload the browser.
 
 - **Reverse proxy (nginx).** Only if a `proxy_cache` is configured (the sample vhost
   in [`config/nginx-default`](config/nginx-default) configures none, so nothing to
@@ -536,9 +523,6 @@ the browser; the served-bytes check should then match the on-disk file.
   the asset instead of serving its own cached copy. In Chrome: **Ctrl+Shift+R** on
   Windows, **Ctrl+Shift+R** on Linux, **Cmd+Shift+R** on macOS. (DevTools open →
   right-click reload → "Empty Cache and Hard Reload" is the exhaustive variant.)
-
-Re-run the served-bytes md5 check after flushing; a match confirms the deploy is live
-end to end.
 
 ---
 
@@ -604,7 +588,7 @@ journalctl -u bitcore.service --since '<deploy-date>' | grep -Ei 'certificate|cu
 The front-page price ticker showing a live USD/BTC value is the user-visible proof.
 
 **UI banner (§4a).** Message / translation tests are in §4a — DevTools `$apply` to
-force the banner, footer language switch for fall-through, and the served-bytes md5
+force the banner, footer language switch for fall-through, and the served template
 check at the `/insight/` prefix.
 
 **`node --check` runtime caveat.** Any `node --check` of a staged file must run
@@ -649,3 +633,18 @@ must not replace the portable pidfile path for cross-platform spawn installs.
 Behavioral change → code review + `bitcoind.js` redeploy, validated in a spawn-mode
 window (connect mode never exercises this path). The remaining lines are user-facing
 message text; safe to retarget `zcashd`→`zerod` in the same revision.
+
+---
+
+## Consider
+
+Open product and display questions — not crash mitigations. One-line reminders only;
+full analysis is out of scope for this document.
+
+- **Currency pulldown footer:** ZER selection shows `factor:` and a numeric value.
+  Review display label, naming (scale vs rate), and value semantics across ZER, mZER,
+  bits, and USD.
+- **Sync timestamps:** `/sync` does not expose start/finish fields; genesis dates are
+  hardcoded in the status template — revisit if API fields are added later.
+- **Connection and sync UX:** optional success banner on healthy connection; coloured
+  progress or status by sync phase — scope and design TBD.

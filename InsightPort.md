@@ -406,26 +406,160 @@ drift) that would be very difficult to catch against a 2018 AngularJS/Bootstrap
 front end. The downside is open-ended and the upside is cosmetic, so we hold the
 existing built bundle as-is.
 
-What we do instead — the **no-build path**, which is how all the deployed UI work
-shipped:
+#### Served paths vs source (canonical)
 
-- **`public/views/**/*.html` Angular templates** take effect with **no build** —
-  templates are loaded at runtime. This is why the deployed `connection.html`
-  banner fix shipped clean without anyone running grunt.
-- **A `custom.css` overlay**, layered after `main.min.css` via one extra `<link>`,
-  carries theme/colour tuning without touching the built CSS bundle. (`main.min.css`
-  is never hand-edited and is byte-identical to the upstream-generated bundle.)
+The browser loads what `index.html` references — not the `public/src/` tree.
+Bitcore serves `insight-ui-zero/public/` as static files under `/insight/`; there is
+no dev-server transpile step in production.
 
-So the deployed UI/theme/image tuning lives entirely in templates + the `custom.css`
-overlay — never in a regenerated bundle. A deeper refresh that genuinely needs
-`public/src/{js,css}` recompiled is **out of scope** under this posture; §6.4 records
-the build environments only as a reference if that decision is ever revisited.
+| Path under `insight-ui-zero/public/` | Browser loads? | Grunt rebuild? | How deployed UI work ships |
+|---|---|---|---|
+| `views/**/*.html`, `index.html` | yes (runtime Angular templates) | **no** | edit file; reference copies in docs `samples/` |
+| `css/custom.css`, `img/**` | yes | **no** | edit file; theme overlays `main.min.css` |
+| `js/main.min.js`, `js/*.min.js`, `css/main.min.css` | yes (`index.html` script/link tags) | **normally declined** — hold upstream bundle | hand-patch min file **or** edit `public/src/` then `grunt compile` (§6.4) |
+| `public/src/js/**`, `public/src/css/**` | **no** (source only) | yes — output must land in `js/*.min.js` / `main.min.css` | not served until compiled or mirrored by a min-file hand-patch |
+
+#### How `index.html` wires the browser
+
+At the bottom of `index.html` (and the matching live file), scripts load in fixed order:
+
+1. `js/vendors.min.js` — third-party libs from `public/lib/` (bower output, concatenated by grunt)
+2. `js/angularjs-all.min.js` — Angular stack slice
+3. `js/main.min.js` — app module: controllers, services, directives, routing
+
+Styles: `css/main.min.css` (grunt-built from `public/src/css/`), then **`css/custom.css`**
+(one extra `<link>` added for Zero — not part of the upstream bundle).
+
+Nothing under `public/src/` appears in those tags. Editing `public/src/js/controllers/currency.js`
+on disk does **nothing** in a user's browser until its logic is copied into `main.min.js`
+(by grunt or by hand).
+
+Templates under `public/views/` are different: Angular loads them over HTTP when a route or
+`ng-include` resolves (e.g. `views/includes/connection.html`). They are plain HTML on disk —
+no concatenation step — which is why the zerod offline banner shipped without touching grunt.
+
+#### Why templates and `custom.css` need no build
+
+- **Templates** — fetched at runtime; `$templateCache` and `ng-include` read the file the
+  server already exposes. Change the HTML, deploy, hard-reload (and purge CDN if applicable).
+- **`custom.css`** — additive stylesheet loaded *after* `main.min.css`. Overrides use the same
+  class names the bundle already defines; `!important` is sometimes needed where upstream rules
+  are specific. **`main.min.css` is never hand-edited** — re-tinting stays in `custom.css`.
+- **Images / favicons** — static files; same deploy path as templates.
+
+**Without editing `main.min.js` (or other `*.min.*` bundles):** templates, `index.html`,
+`custom.css`, and static images. That covers every routine UI change shipped so far (connection
+banner, theme, favicons, status copy). Footer *labels* in `currency.html` can change;
+**controller logic** (e.g. what value `currency.factor` holds) lives only in `main.min.js`.
+
+#### When you must touch `main.min.js`
+
+Use this decision guide before editing:
+
+| You want to change… | Edit | Grunt? |
+|---|---|---|
+| Wording, layout, visibility in a `.html` view | `public/views/…` | no |
+| Colours, spacing, navbar/search chrome | `public/css/custom.css` | no |
+| Favicon, icons, static art | `public/img/…` | no |
+| `$scope` / `$rootScope` behaviour, services, routing, filters | `public/js/main.min.js` (or `public/src/` + rebuild) | hand-patch: no; full rebuild: yes (declined) |
+| Upstream LESS/CSS in the built theme | `public/src/css/` then rebuild | yes (declined) — prefer `custom.css` instead |
+
+**Templates bind to scope names defined in `main.min.js`** (e.g. `currency.factor`, `sync.status`).
+Changing the footer *text* is template work; changing what `factor` *is* when ZER is selected is
+controller work and requires `main.min.js` (currency factor footer — postponed; see
+InsightFix.md **Consider**).
+
+#### Hand-patching `main.min.js` vs `grunt compile`
+
+Edits under `public/src/` do **not** reach the browser by themselves. Two ways to change
+JS behaviour:
+
+1. **`grunt compile`** after editing `public/src/` — regenerates `main.min.js` and
+   related bundles from the full source tree. Full 2018 toolchain; **declined** for routine
+   work (regression risk, §6.3 opening). Horizen's workflow: edit src, run grunt, commit the
+   new `*.min.js` artifacts.
+2. **Hand-patch `public/js/main.min.js`** — edit the served bundle directly (typically a
+   unique find/replace inside a minified controller). **No grunt run**; the browser loads
+   the patched file on next deploy. This is the practical hotfix path when rebuild is declined.
+
+**Hand-patch workflow:**
+
+- Locate the minified block with `grep` (must be a **unique** string — one match only).
+- Apply the smallest change that mirrors what you would put in `public/src/…`.
+- Commit **both** the min patch and the readable `public/src/` file when possible, so a
+  future rebuild does not silently drop the fix.
+- Smoke-test in browser: currency footer, routing, search — minified edits are easy to break
+  with a missing comma or truncated identifier.
+- No `node --check` on the bundle; syntax errors surface only at runtime.
+
+**Misreadings to avoid:**
+
+- *"Editing `public/src` affects the browser"* — **false** unless you also update `main.min.js`
+  or run `grunt compile`.
+- *"No grunt means no JS changes"* — **false** — hand-patching `main.min.js` is a JS change
+  without grunt.
+- *"Templates can fix controller bugs"* — **false** when the bug is the value bound to scope
+  (factor regression), not the label around it.
+
+So "no grunt rebuild" is true for templates/CSS/images. For controller fixes, the
+alternative to grunt is **patch `main.min.js` on disk**, not skip the bundle.
+
+#### What we ship on the no-build path
+
+Routine deployed UI work uses only:
+
+- **`public/views/**/*.html`** — loaded at runtime (e.g. `connection.html` offline banner).
+- **`custom.css`** — layered after `main.min.css`.
+
+Deeper refresh needing recompiled `public/src/{js,css}` (new directives, table columns driven
+by controller refactors, upstream CSS recompile) is **out of scope** unless §6.4 is invoked.
+Example of controller work needing a min patch: currency `factor` display (InsightFix.md
+**Consider** — not shipped).
+
+Controller logic changes require `main.min.js` — hand-patch or declined full rebuild.
 
 ### 6.4 Running the 2018 toolchain — only if the rebuild is ever revisited
 
 We do **not** run this build today (§6.3); this section exists solely so that, if a
 future decision reverses that posture, the known-good environments are already
 identified rather than re-discovered. Nothing below is part of the current workflow.
+
+#### Rebuild prerequisites (not just grunt and bower)
+
+A fresh `insight-ui-zero` clone is not build-ready. Before `grunt compile`:
+
+| Step | Why |
+|---|---|
+| **Node.js v8.17.0** | Last 8.x; only supported runtime for this dependency tree (InsightBlock.md §4.0). Modern Node (e.g. v25) fails on native/gyp deps; Apple Silicon needs Docker or an x86/Node-8 environment. |
+| **`npm install`** | Installs grunt, concat/minify plugins, and other devDependencies into `node_modules/` (absent in a bare clone). |
+| **`bower install`** | Populates `public/lib/` with vendored Angular, Bootstrap, etc. A sparse clone may only have `zeroclipboard`; grunt cannot build `vendors.min.js` without the full bower tree. |
+| **`grunt compile`** | Regenerates `public/js/{angularjs-all,main,vendors}.min.js`, `public/css/main.min.css`, and `public/src/js/translations.js`. Default `grunt` also watches; one-shot build uses `grunt compile`. |
+
+Template/CSS-only deploys need **none** of the above. Hand-patching `main.min.js` also
+needs none — only a text edit and deploy.
+
+#### What `grunt compile` consumes and produces
+
+Rough data flow (upstream `Gruntfile.js` in `insight-ui-zero`):
+
+```
+bower install  -->  public/lib/          (Angular, Bootstrap, …)
+public/src/js/   -->  grunt concat/uglify -->  public/js/main.min.js
+public/src/css/  -->  grunt less/minify  -->  public/css/main.min.css
+public/lib/      -->  grunt concat       -->  public/js/vendors.min.js
+po/*.po          -->  grunt gettext      -->  public/src/js/translations.js  (also folded into main)
+```
+
+If `bower install` was skipped, grunt typically fails mid-task with missing files under
+`public/lib/`. If `npm install` was skipped, `grunt` itself is not on PATH / not in
+`node_modules/.bin/`. Both must succeed on **Node 8.17.0** before trusting output.
+
+**After a rebuild (if ever run):** diff the three `public/js/*.min.js` and `main.min.css`
+against the previous commit — expect large hunks even for small src edits. Smoke-test
+routing, search, currency pulldown, and block/tx pages before promoting to production.
+A silent concat order change can break Angular DI without a compile error.
+
+#### Build environments
 
 Local system Node is modern (e.g. v25.x); the toolchain needs **Node 8.17.0**,
 and `npm install` of the native/gyp-heavy deps fails on Apple Silicon under
@@ -440,10 +574,7 @@ modern Node. Two viable build environments:
    avoids compiling Node 8 on ARM. `docker run -v $PWD:/app -w /app node:8.17.0
    sh -c 'npm install && bower install --allow-root && grunt compile'`. Robust
    because it sidesteps both the ARM/Node-8 native-build failure and the missing
-   local `node_modules`. Note: `insight-ui-zero/node_modules` is **not** present
-   in the clone, and `public/lib` holds only `zeroclipboard` (not Angular /
-   Bootstrap), so **both** `npm install` and `bower install` are required before
-   `grunt compile` — a template-only edit needs neither.
+   local `node_modules`.
 
 Per-repo Node selection without changing the system default: drop an `.nvmrc`
 (`8.17.0`) in the repo and `nvm use`, or run one-off via `nvm exec 8.17.0 <cmd>`.
